@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+.claude/
+*.local
+# Xcode
+xcuserdata/
+DerivedData/
+build/

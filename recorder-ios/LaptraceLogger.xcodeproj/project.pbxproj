@@ -1,0 +1,508 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		029ECDDEC9F59234AE5F046C /* Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD86CC57A657B686CA9427B8 /* Tracks.swift */; };
+		11146043473F59A7329B0DBD /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5069609DCC0DF5E57810A24D /* Recorder.swift */; };
+		45588A51D3BD5F11685A1D30 /* LaptraceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */; };
+		4EE2F0CF27BBE94D23C4A0B6 /* Exporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */; };
+		532CFDA7FD428AD7E9CA3C89 /* RawData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11883366D7A6DB9210BD4229 /* RawData.swift */; };
+		881CF232A046E88CEA0D2BF1 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */; };
+		9CDAF42411C9248551F9ADE5 /* tracks.json in Resources */ = {isa = PBXBuildFile; fileRef = 13A96D481C9451AC06DD36BA /* tracks.json */; };
+		B1E427071D151B35CC23F63A /* ExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */; };
+		B4C9A6DAC815BE91297A1825 /* LapTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B44ABD087B9F95368930D6 /* LapTimer.swift */; };
+		B8089E51E274E0874D79F219 /* TracksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */; };
+		CFAC254ECDD3243596D35CA9 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB0B5B8D298DE67111D6333 /* Geo.swift */; };
+		D74C9A4BB81EC6EBB7B71A69 /* Synthetic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */; };
+		E38C5B75A5FE3909DE5A7D60 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */; };
+		F65DA0D01AF0695F4C9D68EA /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94A3735A387D8E6CE74B465 /* SessionStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8B774192AE8A50DB2495E5E4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C4D1A519A122C8405310503A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6C08B4BEF89CDB2B962F14A4;
+			remoteInfo = LaptraceLogger;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		11883366D7A6DB9210BD4229 /* RawData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawData.swift; sourceTree = "<group>"; };
+		13A96D481C9451AC06DD36BA /* tracks.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tracks.json; sourceTree = "<group>"; };
+		2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
+		423CB57DD3C751ED04DC8E22 /* LaptraceLogger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LaptraceLogger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exporter.swift; sourceTree = "<group>"; };
+		4DB0B5B8D298DE67111D6333 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
+		4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		5069609DCC0DF5E57810A24D /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synthetic.swift; sourceTree = "<group>"; };
+		9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaptraceApp.swift; sourceTree = "<group>"; };
+		A8B44ABD087B9F95368930D6 /* LapTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LapTimer.swift; sourceTree = "<group>"; };
+		B94A3735A387D8E6CE74B465 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		BDF4F1BB804EB781DAA34888 /* LaptraceCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LaptraceCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2B0264D905CC660E8C4A1F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExporterTests.swift; sourceTree = "<group>"; };
+		ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracksView.swift; sourceTree = "<group>"; };
+		FD86CC57A657B686CA9427B8 /* Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tracks.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1271F671717721A7BB3C768A /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */,
+				4DB0B5B8D298DE67111D6333 /* Geo.swift */,
+				A8B44ABD087B9F95368930D6 /* LapTimer.swift */,
+				11883366D7A6DB9210BD4229 /* RawData.swift */,
+				FD86CC57A657B686CA9427B8 /* Tracks.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		2B328BDEE8B752DAD7E5B032 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				13A96D481C9451AC06DD36BA /* tracks.json */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		55F224D8370AB4291A95F8E2 /* Recording */ = {
+			isa = PBXGroup;
+			children = (
+				5069609DCC0DF5E57810A24D /* Recorder.swift */,
+				B94A3735A387D8E6CE74B465 /* SessionStore.swift */,
+			);
+			path = Recording;
+			sourceTree = "<group>";
+		};
+		5DCB7E73A6DBD01EB8486398 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BDF4F1BB804EB781DAA34888 /* LaptraceCoreTests.xctest */,
+				423CB57DD3C751ED04DC8E22 /* LaptraceLogger.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6A813D2B0DF1AE6622F4F254 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */,
+				4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */,
+				ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B2854547BA4A50D711C82CBD /* Laptrace */ = {
+			isa = PBXGroup;
+			children = (
+				C2B0264D905CC660E8C4A1F8 /* Info.plist */,
+				9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */,
+				1271F671717721A7BB3C768A /* Core */,
+				55F224D8370AB4291A95F8E2 /* Recording */,
+				2B328BDEE8B752DAD7E5B032 /* Resources */,
+				6A813D2B0DF1AE6622F4F254 /* Views */,
+			);
+			path = Laptrace;
+			sourceTree = "<group>";
+		};
+		B8A69F9A2E9D03D4DF99EE5F /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */,
+				8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		C79BE676FCEDBACDAD02415B = {
+			isa = PBXGroup;
+			children = (
+				B2854547BA4A50D711C82CBD /* Laptrace */,
+				B8A69F9A2E9D03D4DF99EE5F /* Tests */,
+				5DCB7E73A6DBD01EB8486398 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6C08B4BEF89CDB2B962F14A4 /* LaptraceLogger */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA023762EF850EA80659D86F /* Build configuration list for PBXNativeTarget "LaptraceLogger" */;
+			buildPhases = (
+				4330AB29985E94348B376E3F /* Sources */,
+				F111B5C5ADB85F167C0742E6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LaptraceLogger;
+			packageProductDependencies = (
+			);
+			productName = LaptraceLogger;
+			productReference = 423CB57DD3C751ED04DC8E22 /* LaptraceLogger.app */;
+			productType = "com.apple.product-type.application";
+		};
+		965BCE62021E616229DDB423 /* LaptraceCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2E8B42AEB821F737AF319A18 /* Build configuration list for PBXNativeTarget "LaptraceCoreTests" */;
+			buildPhases = (
+				C817AD331085471A05E3E4D5 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9FC1BBE028E32D36E93F3C16 /* PBXTargetDependency */,
+			);
+			name = LaptraceCoreTests;
+			packageProductDependencies = (
+			);
+			productName = LaptraceCoreTests;
+			productReference = BDF4F1BB804EB781DAA34888 /* LaptraceCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C4D1A519A122C8405310503A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6C08B4BEF89CDB2B962F14A4 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					965BCE62021E616229DDB423 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = B7BA4A613DA522AEF25ECD31 /* Build configuration list for PBXProject "LaptraceLogger" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = C79BE676FCEDBACDAD02415B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5DCB7E73A6DBD01EB8486398 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6C08B4BEF89CDB2B962F14A4 /* LaptraceLogger */,
+				965BCE62021E616229DDB423 /* LaptraceCoreTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F111B5C5ADB85F167C0742E6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9CDAF42411C9248551F9ADE5 /* tracks.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4330AB29985E94348B376E3F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4EE2F0CF27BBE94D23C4A0B6 /* Exporter.swift in Sources */,
+				CFAC254ECDD3243596D35CA9 /* Geo.swift in Sources */,
+				B4C9A6DAC815BE91297A1825 /* LapTimer.swift in Sources */,
+				45588A51D3BD5F11685A1D30 /* LaptraceApp.swift in Sources */,
+				532CFDA7FD428AD7E9CA3C89 /* RawData.swift in Sources */,
+				881CF232A046E88CEA0D2BF1 /* RecordView.swift in Sources */,
+				11146043473F59A7329B0DBD /* Recorder.swift in Sources */,
+				F65DA0D01AF0695F4C9D68EA /* SessionStore.swift in Sources */,
+				E38C5B75A5FE3909DE5A7D60 /* SessionsView.swift in Sources */,
+				029ECDDEC9F59234AE5F046C /* Tracks.swift in Sources */,
+				B8089E51E274E0874D79F219 /* TracksView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C817AD331085471A05E3E4D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1E427071D151B35CC23F63A /* ExporterTests.swift in Sources */,
+				D74C9A4BB81EC6EBB7B71A69 /* Synthetic.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9FC1BBE028E32D36E93F3C16 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6C08B4BEF89CDB2B962F14A4 /* LaptraceLogger */;
+			targetProxy = 8B774192AE8A50DB2495E5E4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		576BB3767704FF6A08CE02D5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Laptrace/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Laptrace;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Laptrace keeps recording your lap while the screen is locked.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Laptrace records your GPS track to time laps and analyse your driving.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Laptrace records acceleration to measure braking and cornering g-forces.";
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.logger;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		9594A041A3FBBD6D26DA4D2D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AEBDA40E93767A50A52F32FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.LaptraceCoreTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LaptraceLogger.app/LaptraceLogger";
+			};
+			name = Release;
+		};
+		DDA3FB693D337B2DF929B044 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.LaptraceCoreTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LaptraceLogger.app/LaptraceLogger";
+			};
+			name = Debug;
+		};
+		E3A6698D4BD2FCDAF0B5C3FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		F281EAF9E16EAE8E313A7C51 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Laptrace/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Laptrace;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Laptrace keeps recording your lap while the screen is locked.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Laptrace records your GPS track to time laps and analyse your driving.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Laptrace records acceleration to measure braking and cornering g-forces.";
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.logger;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2E8B42AEB821F737AF319A18 /* Build configuration list for PBXNativeTarget "LaptraceCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DDA3FB693D337B2DF929B044 /* Debug */,
+				AEBDA40E93767A50A52F32FF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B7BA4A613DA522AEF25ECD31 /* Build configuration list for PBXProject "LaptraceLogger" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9594A041A3FBBD6D26DA4D2D /* Debug */,
+				E3A6698D4BD2FCDAF0B5C3FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FA023762EF850EA80659D86F /* Build configuration list for PBXNativeTarget "LaptraceLogger" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				576BB3767704FF6A08CE02D5 /* Debug */,
+				F281EAF9E16EAE8E313A7C51 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C4D1A519A122C8405310503A /* Project object */;
+}

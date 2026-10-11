@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "notes": "Gate = directed line segment. A crossing counts when the path segment intersects start→end AND travel bearing is within ±90° of travelBearing. Coordinates are WGS84 decimal degrees. A1 gates are estimated from satellite imagery, not surveyed.",
+  "tracks": [
+    {
+      "id": "a1-motor-park-full",
+      "name": "A1 Motor Park (full)",
+      "country": "BG",
+      "center": { "lat": 42.3155, "lon": 23.5385 },
+      "radiusMeters": 1500,
+      "gates": [
+        { "id": "sf", "label": "Start / Finish", "start": { "lat": 42.314821, "lon": 23.539114 }, "end": { "lat": 42.314813, "lon": 23.539307 }, "travelBearing": 180 },
+        { "id": "s1", "label": "Split 1", "start": { "lat": 42.317307938, "lon": 23.538299323 }, "end": { "lat": 42.317320559, "lon": 23.537956538 }, "travelBearing": 0 },
+        { "id": "s2", "label": "Split 2", "start": { "lat": 42.313813908, "lon": 23.537535606 }, "end": { "lat": 42.313827531, "lon": 23.537150720 }, "travelBearing": 180 },
+        { "id": "s3", "label": "Split 3", "start": { "lat": 42.317773689, "lon": 23.540072063 }, "end": { "lat": 42.317790288, "lon": 23.539740119 }, "travelBearing": 0 }
+      ]
+    }
+  ]
+}
