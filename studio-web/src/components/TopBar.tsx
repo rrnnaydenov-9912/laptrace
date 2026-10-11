@@ -6,9 +6,11 @@ interface Props {
   onImport: () => void;
   onLibrary: () => void;
   libraryOpen: boolean;
+  units: 'kmh' | 'mph';
+  onUnits: () => void;
 }
 
-export function TopBar({ theme, onTheme, onImport, onLibrary, libraryOpen }: Props) {
+export function TopBar({ theme, onTheme, onImport, onLibrary, libraryOpen, units, onUnits }: Props) {
   return (
     <header className="topbar">
       <button type="button" className="icon-btn lib-toggle" onClick={onLibrary} aria-label="Sessions" aria-expanded={libraryOpen}>
@@ -24,6 +26,15 @@ export function TopBar({ theme, onTheme, onImport, onLibrary, libraryOpen }: Pro
       </div>
       <div className="topbar-actions">
         <button type="button" className="btn btn--accent" onClick={onImport}>Import CSV</button>
+        <button
+          type="button"
+          className="btn units-btn"
+          onClick={onUnits}
+          aria-label={units === 'kmh' ? 'Show speeds in mph' : 'Show speeds in km/h'}
+          title="Speed units"
+        >
+          {units === 'kmh' ? 'km/h' : 'mph'}
+        </button>
         <button
           type="button"
           className="icon-btn"

@@ -8,13 +8,28 @@ import UIKit
 @Observable
 final class Recorder: NSObject, CLLocationManagerDelegate {
     enum State: Equatable { case idle, recording }
+    enum Mode: String { case track, drive }
+
+    /// One recorder for the app, so drive detection can start a recording without the UI.
+    static let shared = Recorder()
 
     // Live state for the UI
     private(set) var state: State = .idle
+    /// Chosen in the Record tab; a running recording keeps the mode it started with.
+    var mode: Mode = .track
+    /// True when drive detection started the current recording, so it may also stop it.
+    private(set) var autoStarted = false
+    private(set) var driveDistance: Double = 0
+    private(set) var driveTopSpeed: Double = 0
+    @ObservationIgnored private var lastDriveFix: GPSFix?
+    /// Fixes go to this hook too, so drive detection can watch speed without its own manager.
+    @ObservationIgnored var onFix: ((GPSFix) -> Void)?
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
     private(set) var lastFix: GPSFix?
     private(set) var track: Track?
     private(set) var session: SessionMeta?
+    /// The session just saved by Stop, for the debrief sheet.
+    var lastStopped: SessionMeta?
     private(set) var laps: [CompletedLap] = []
     private(set) var currentLapStart: Double?
     private(set) var lastSplit: (label: String, delta: Double?)?
@@ -23,6 +38,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     var now = Date()
 
     var best: CompletedLap? { laps.min(by: { $0.duration < $1.duration }) }
+    var elapsed: Double? { session.map { now.timeIntervalSince($0.started) } }
     var currentLapElapsed: Double? { currentLapStart.map { now.timeIntervalSince1970 - $0 } }
     var speedKmh: Double { max(0, lastFix?.speed ?? 0) * 3.6 }
     var gpsAccuracy: Double? { lastFix?.hAcc }
@@ -31,6 +47,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     private let motion = CMMotionManager()
     private let motionQueue = OperationQueue()
     private let timer = LapTimer()
+    @ObservationIgnored private let cue = LapCue()
     private var gpsWriter: AppendWriter?
     private var motionWriter: AppendWriter?
     @ObservationIgnored private var fixCount = 0
@@ -61,8 +78,23 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         location.startUpdatingLocation()
     }
 
+    /// Leaves GPS running while recording or while drive detection is checking a possible drive.
     func stopPreviewIfIdle() {
-        if state == .idle { location.stopUpdatingLocation() }
+        if state == .idle && !keepGPSOn { location.stopUpdatingLocation() }
+    }
+
+    @ObservationIgnored var keepGPSOn = false
+
+    /// Background-capable GPS for drive detection's probe window.
+    func startBackgroundGPS() {
+        location.allowsBackgroundLocationUpdates = true
+        location.startUpdatingLocation()
+    }
+
+    func stopBackgroundGPSIfIdle() {
+        guard state == .idle else { return }
+        location.allowsBackgroundLocationUpdates = false
+        location.stopUpdatingLocation()
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -91,16 +123,22 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
 
     // MARK: - Recording
 
-    func start() {
+    func start(mode: Mode? = nil, auto: Bool = false) {
         guard state == .idle else { return }
-        let meta = SessionStore.shared.create(trackId: track?.id, trackName: track?.name)
+        if let mode { self.mode = mode }
+        autoStarted = auto
+        let drive = self.mode == .drive
+        driveDistance = 0; driveTopSpeed = 0; lastDriveFix = nil
+        let meta = drive
+            ? SessionStore.shared.create(trackId: nil, trackName: nil, mode: "drive")
+            : SessionStore.shared.create(trackId: track?.id, trackName: track?.name)
         session = meta
         gpsWriter = try? AppendWriter(url: SessionStore.shared.gpsURL(meta.id), flushThreshold: 4_096)
         motionWriter = try? AppendWriter(url: SessionStore.shared.motionURL(meta.id))
         fixCount = 0; motionCount = 0; motionCountAtTick = 0
         laps = []; currentLapStart = nil; lastSplit = nil
         timer.reset()
-        timer.setTrack(track)
+        timer.setTrack(drive ? nil : track)
 
         location.allowsBackgroundLocationUpdates = true
         location.showsBackgroundLocationIndicator = true
@@ -112,25 +150,51 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         tick = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.onTick() }
     }
 
-    func stop() {
-        guard state == .recording, var meta = session else { return }
+    /// Stops and saves. Returns the saved session, or nil when nothing was saved.
+    /// `discardShorterThan` drops a drive that covered less distance (metres), e.g. a false auto-start.
+    @discardableResult
+    func stop(discardShorterThan minDistance: Double = 0) -> SessionMeta? {
+        guard state == .recording, var meta = session else { return nil }
         tick?.invalidate(); tick = nil
         motion.stopDeviceMotionUpdates()
         motionQueue.waitUntilAllOperationsAreFinished()
         gpsWriter?.close(); motionWriter?.close()
         gpsWriter = nil; motionWriter = nil
+        keepGPSOn = false
         location.allowsBackgroundLocationUpdates = false
         UIApplication.shared.isIdleTimerDisabled = false
         meta.ended = Date()
         meta.fixCount = fixCount
         meta.motionCount = motionCount
-        meta.laps = laps
-        meta.trackId = track?.id
-        meta.trackName = track?.name
-        SessionStore.shared.save(meta)
         session = nil
         state = .idle
         motionRate = 0
+        let wasAuto = autoStarted
+        autoStarted = false
+        if meta.isDrive {
+            meta.distance = driveDistance
+            meta.topSpeed = driveTopSpeed
+            if driveDistance < minDistance {
+                SessionStore.shared.delete(meta)
+                return nil
+            }
+        } else {
+            meta.laps = laps
+            meta.trackId = track?.id
+            meta.trackName = track?.name
+        }
+        SessionStore.shared.save(meta)
+        // The debrief is about laps; drives (manual or automatic) don't get one.
+        if !wasAuto && !meta.isDrive { lastStopped = meta }
+        return meta
+    }
+
+    /// Remember the moment a camera started, so video can be lined up with the data later.
+    func markVideoStart() {
+        guard state == .recording, var s = session else { return }
+        s.videoStart = Date()
+        session = s
+        SessionStore.shared.save(s)
     }
 
     private func onTick() {
@@ -173,6 +237,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
 
     private func handle(_ fix: GPSFix) {
         lastFix = fix
+        onFix?(fix)
         if !manualTrack, track == nil || state == .idle, let t = TrackStore.shared.nearest(to: fix.latLon), t.id != track?.id {
             track = t
             timer.setTrack(t)
@@ -183,11 +248,16 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             fixCount += 1
         }
         guard fix.hAcc > 0, fix.hAcc <= 30 else { return }
+        if session?.isDrive == true {
+            accumulateDrive(fix)
+            return
+        }
         for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
             switch e {
             case .lapStarted(let t):
                 currentLapStart = t
             case .lapCompleted(let lap):
+                cue.speak(duration: lap.duration, previousBest: best?.duration)
                 laps.append(lap)
                 let delta = best.map { lap.duration - $0.duration }
                 lastSplit = ("Lap \(lap.number)", lap.number == best?.number ? nil : delta)
@@ -196,6 +266,16 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
                 lastSplit = (gate.label, delta)
             }
         }
+    }
+
+    private func accumulateDrive(_ fix: GPSFix) {
+        if fix.speed >= 0 { driveTopSpeed = max(driveTopSpeed, fix.speed * 3.6) }
+        defer { lastDriveFix = fix }
+        guard let prev = lastDriveFix else { return }
+        let d = haversineMeters(prev.latLon, fix.latLon)
+        // Ignore GPS jitter while parked and jumps that would need over 400 km/h.
+        let dt = fix.t - prev.t
+        if d >= 1, dt > 0, d / dt < 110 { driveDistance += d }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}

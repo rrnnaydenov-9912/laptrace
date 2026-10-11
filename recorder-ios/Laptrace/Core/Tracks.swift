@@ -29,9 +29,17 @@ struct Track: Codable, Hashable, Identifiable {
     var center: LatLon
     var radiusMeters: Double
     var gates: [Gate]
+    var corners: [TrackCorner]? = nil
 
     var startFinish: Gate? { gates.first(where: \.isStartFinish) }
     var splits: [Gate] { gates.filter { !$0.isStartFinish } }
+}
+
+/// Optional named corner in tracks.json, e.g. {"number": 1, "name": "Hairpin", "note": "Brake at the 100 m board"}.
+struct TrackCorner: Codable, Hashable {
+    var number: Int
+    var name: String?
+    var note: String?
 }
 
 private struct TrackFile: Codable {

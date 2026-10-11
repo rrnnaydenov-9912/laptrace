@@ -1,8 +1,21 @@
 import SwiftUI
+import UIKit
+
+/// Runs at every launch, including when iOS relaunches the app in the background for a location
+/// wake-up, so drive detection is listening before any UI exists.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        _ = Recorder.shared
+        DriveDetection.shared.resume()
+        return true
+    }
+}
 
 @main
 struct LaptraceApp: App {
-    @State private var recorder = Recorder()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var recorder = Recorder.shared
+    @State private var detection = DriveDetection.shared
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +28,7 @@ struct LaptraceApp: App {
                     .tabItem { Label("Tracks", systemImage: "flag.checkered") }
             }
             .environment(recorder)
+            .environment(detection)
             .tint(.orange)
             .preferredColorScheme(.dark)
         }
@@ -32,6 +46,11 @@ enum Fmt {
     static func delta(_ d: Double?) -> String {
         guard let d else { return "" }
         return String(format: "%@%.2f", d >= 0 ? "+" : "−", abs(d))
+    }
+
+    static func km(_ m: Double?) -> String {
+        guard let m else { return "–" }
+        return m < 1000 ? String(format: "%.0f m", m) : String(format: "%.1f km", m / 1000)
     }
 
     static func duration(_ s: Double) -> String {

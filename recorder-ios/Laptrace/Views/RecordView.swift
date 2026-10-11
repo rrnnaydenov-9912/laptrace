@@ -6,31 +6,51 @@ struct RecordView: View {
     @State private var showTrackPicker = false
     @State private var confirmStop = false
     @State private var sfMessage: String?
+    @State private var videoMarked = false
+    @State private var showSettings = false
+    @AppStorage("checklistDone") private var checklistDone = false
+
+    /// The running recording's mode, or the one picked for the next recording.
+    private var isDrive: Bool { rec.state == .recording ? rec.session?.isDrive == true : rec.mode == .drive }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 statusBar
+                if rec.state == .idle { modePicker }
                 Spacer(minLength: 0)
-                lapClock
-                deltaRow
+                if isDrive {
+                    driveClock
+                } else {
+                    lapClock
+                    deltaRow
+                }
                 Spacer(minLength: 0)
-                lapStats
+                if isDrive { driveStats } else { lapStats }
                 controls
             }
             .padding()
             .navigationTitle("Laptrace")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showTrackPicker = true } label: {
-                        Label(rec.track?.name ?? "No track", systemImage: "flag.checkered")
-                            .labelStyle(.titleAndIcon)
-                            .font(.subheadline)
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                        .accessibilityLabel("Settings")
+                }
+                if !isDrive {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showTrackPicker = true } label: {
+                            Label(rec.track?.name ?? "No track", systemImage: "flag.checkered")
+                                .labelStyle(.titleAndIcon)
+                                .font(.subheadline)
+                        }
                     }
                 }
             }
             .sheet(isPresented: $showTrackPicker) { TrackPicker() }
+            .sheet(isPresented: $showSettings) { RecordSettings() }
+            .sheet(item: Binding(get: { rec.lastStopped }, set: { rec.lastStopped = $0 })) { DebriefSheet(meta: $0) }
+            .overlay { if !checklistDone && rec.state == .idle { checklist } }
             .onAppear { rec.startPreview() }
             .onDisappear { rec.stopPreviewIfIdle() }
             .confirmationDialog("Stop recording?", isPresented: $confirmStop, titleVisibility: .visible) {
@@ -78,6 +98,39 @@ struct RecordView: View {
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(color.opacity(0.18), in: Capsule())
             .foregroundStyle(color)
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: Binding(get: { rec.mode }, set: { rec.mode = $0 })) {
+            Text("Track").tag(Recorder.Mode.track)
+            Text("Drive").tag(Recorder.Mode.drive)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var driveClock: some View {
+        VStack(spacing: 4) {
+            Text(rec.state == .recording ? (rec.autoStarted ? "Drive · started automatically" : "Drive") : "Road drive")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text(rec.elapsed.map(Fmt.duration) ?? "0:00")
+                .font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+            Text(String(format: "%.0f km/h", rec.speedKmh))
+                .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var driveStats: some View {
+        HStack {
+            stat("Distance", rec.state == .recording ? Fmt.km(rec.driveDistance) : "–")
+            Divider().frame(height: 40)
+            stat("Top speed", rec.state == .recording ? String(format: "%.0f km/h", rec.driveTopSpeed) : "–")
+        }
+        .padding()
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var lapClock: some View {
@@ -128,13 +181,39 @@ struct RecordView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var checklist: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Before your first session").font(.title2.bold())
+                ForEach([("iphone.gen3", "Phone mounted firmly, so it can't move or fall"),
+                         ("lock.rotation", "Screen orientation locked"),
+                         ("moon.fill", "Do Not Disturb on, so calls don't interrupt"),
+                         ("battery.75percent", "Battery above 50%")], id: \.1) { icon, text in
+                    Label(text, systemImage: icon)
+                }
+                Button {
+                    checklistDone = true
+                } label: {
+                    Text("Got it").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 6)
+            }
+            .padding(24)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .padding(24)
+        }
+    }
+
     private var controls: some View {
         VStack(spacing: 12) {
             Button {
                 if rec.state == .recording {
                     confirmStop = true
                 } else {
-                    rec.start()
+                    videoMarked = false
+                    rec.start(mode: rec.mode)
                 }
             } label: {
                 Text(rec.state == .recording ? "Stop" : "Start recording")
@@ -144,6 +223,19 @@ struct RecordView: View {
             .buttonStyle(.borderedProminent)
             .tint(rec.state == .recording ? .red : .orange)
 
+            if rec.state == .recording {
+                Button {
+                    rec.markVideoStart()
+                    videoMarked = true
+                } label: {
+                    Label(videoMarked ? "Video start marked – tap again to re-mark" : "Mark video start",
+                          systemImage: videoMarked ? "checkmark.circle" : "video")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if !isDrive {
             Button {
                 sfMessage = rec.setStartFinishHere()
                     ? "Start/finish line set here. Laps count from your next crossing."
@@ -153,6 +245,46 @@ struct RecordView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+            }
+        }
+    }
+}
+
+struct RecordSettings: View {
+    @Environment(DriveDetection.self) private var detection
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @AppStorage(LapCue.enabledKey) private var speakLaps = true
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle(isOn: $speakLaps) { Label("Speak lap times", systemImage: "speaker.wave.2") }
+                } header: {
+                    Text("Track")
+                }
+                Section {
+                    Toggle(isOn: Binding(get: { detection.enabled }, set: { detection.setEnabled($0) })) {
+                        Label("Auto-record drives", systemImage: "car")
+                    }
+                    if detection.needsAlways {
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        } label: {
+                            Label("Set location access to Always", systemImage: "exclamationmark.triangle")
+                        }
+                        .foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Drives")
+                } footer: {
+                    Text("Laptrace starts recording when it notices you're driving, and saves the drive when you've been parked for about 4 minutes. You don't need to open the app. Drives under 500 m are discarded. This needs location access set to Always, and uses a little more battery.")
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }

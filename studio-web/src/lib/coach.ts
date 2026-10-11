@@ -1,6 +1,7 @@
 // Rule-based coach: quantified, plain-language opportunities. No AI, no network.
 
 import { stdDev } from './geo';
+import { fmtSpeedU } from './format';
 import type { CornerStats } from './corners';
 
 export interface CoachTip {
@@ -17,7 +18,7 @@ export interface LapCornerStats {
 }
 
 const fmtM = (v: number) => `${Math.round(Math.abs(v))} m`;
-const fmtK = (v: number) => `${Math.round(Math.abs(v))} km/h`;
+const fmtK = (v: number) => fmtSpeedU(Math.abs(v));
 
 /** Describe how `lap` differs from `ref` in one corner zone. */
 function describe(lap: CornerStats, ref: CornerStats): { title: string; phrases: string[] } {

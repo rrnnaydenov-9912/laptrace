@@ -17,8 +17,31 @@ export function fmtDelta(s: number | null | undefined, digits = 3): string {
   return `${s > 0 ? '+' : '−'}${Math.abs(s).toFixed(digits)}`;
 }
 
+export type SpeedUnit = 'kmh' | 'mph';
+let unit: SpeedUnit = 'kmh';
+
+/** Display unit for speeds. Telemetry is always stored in km/h. */
+export function setSpeedUnit(u: SpeedUnit): void {
+  unit = u;
+}
+export function getSpeedUnit(): SpeedUnit {
+  return unit;
+}
+export function speedUnit(): string {
+  return unit === 'mph' ? 'mph' : 'km/h';
+}
+export function speedFactor(): number {
+  return unit === 'mph' ? 0.621371 : 1;
+}
+
+/** km/h value in the display unit, no suffix. */
 export function fmtSpeed(v: number | null | undefined): string {
-  return v == null || !Number.isFinite(v) ? '—' : v.toFixed(0);
+  return v == null || !Number.isFinite(v) ? '—' : (v * speedFactor()).toFixed(0);
+}
+
+/** km/h value (or difference) in the display unit, with suffix. */
+export function fmtSpeedU(v: number | null | undefined): string {
+  return `${fmtSpeed(v)} ${speedUnit()}`;
 }
 
 export function fmtDuration(s: number): string {

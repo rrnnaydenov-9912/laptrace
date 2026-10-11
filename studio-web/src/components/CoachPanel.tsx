@@ -1,6 +1,7 @@
 // Rule-based coaching notes for the focus lap.
 
 import { cursor } from '../state/cursor';
+import { speedFactor, speedUnit } from '../lib/format';
 import type { CoachTip, Consistency } from '../lib/coach';
 import type { Workspace } from '../lib/workspace';
 
@@ -45,7 +46,7 @@ export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps }: Pr
           </p>
           {cons.worstCorner && (
             <p>
-              Least consistent: <b>corner {cons.worstCorner.corner}</b>, min speed σ {cons.worstCorner.sd.toFixed(1)} km/h.
+              Least consistent: <b>corner {cons.worstCorner.corner}</b>, min speed σ {(cons.worstCorner.sd * speedFactor()).toFixed(1)} {speedUnit()}.
             </p>
           )}
         </div>

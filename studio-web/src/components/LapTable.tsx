@@ -1,6 +1,6 @@
 // Lap list with sectors, deltas, overlay selection and reference choice.
 
-import { fmtDelta, fmtLap, fmtSpeed } from '../lib/format';
+import { fmtDelta, fmtLap, fmtSpeed, speedUnit } from '../lib/format';
 import type { SessionAnalysis } from '../lib/types';
 
 export interface LapGroup {
@@ -40,8 +40,8 @@ export function LapTable(p: Props) {
               <th>Time</th>
               {Array.from({ length: nSec }, (_, i) => <th key={i}>S{i + 1}</th>)}
               <th title="Delta to the session's best lap">Δ best</th>
-              <th title="Max speed, km/h">Vmax</th>
-              <th title="Min speed, km/h">Vmin</th>
+              <th title={`Max speed, ${speedUnit()}`}>Vmax</th>
+              <th title={`Min speed, ${speedUnit()}`}>Vmin</th>
             </tr>
           </thead>
           {p.groups.map((g) => {

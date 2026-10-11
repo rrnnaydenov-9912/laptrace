@@ -11,10 +11,30 @@ struct SessionMeta: Codable, Identifiable, Hashable {
     var fixCount: Int = 0
     var motionCount: Int = 0
     var laps: [CompletedLap] = []
+    var driver: String?
+    var vehicle: String?
+    var notes: String?
+    var videoStart: Date?
+    /// "drive" for a road drive, nil or "track" for a track session.
+    var mode: String?
+    /// Road drives only: metres travelled and top speed in km/h.
+    var distance: Double?
+    var topSpeed: Double?
 
+    var isDrive: Bool { mode == "drive" }
     var duration: Double { (ended ?? Date()).timeIntervalSince(started) }
     var best: CompletedLap? { laps.min(by: { $0.duration < $1.duration }) }
-    var title: String { trackName ?? "Session" }
+    var title: String { isDrive ? "Drive" : (trackName ?? "Session") }
+
+    /// Optional rows for the CSV metadata block.
+    var csvMeta: [(key: String, value: String)] {
+        var out: [(String, String)] = [("Mode", isDrive ? "Drive" : "Track")]
+        if let driver { out.append(("Driver", driver)) }
+        if let vehicle { out.append(("Vehicle", vehicle)) }
+        if let notes { out.append(("Notes", notes)) }
+        if let videoStart { out.append(("Video Start UTC", ISO8601DateFormatter().string(from: videoStart))) }
+        return out
+    }
 }
 
 /// Sessions live in Documents/Sessions/<id>/ (visible in the Files app):
@@ -48,11 +68,11 @@ final class SessionStore {
         }.sorted { $0.started > $1.started }
     }
 
-    func create(trackId: String?, trackName: String?) -> SessionMeta {
+    func create(trackId: String?, trackName: String?, mode: String? = nil) -> SessionMeta {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let meta = SessionMeta(id: f.string(from: Date()), started: Date(), trackId: trackId, trackName: trackName)
+        let meta = SessionMeta(id: f.string(from: Date()), started: Date(), trackId: trackId, trackName: trackName, mode: mode)
         try? FileManager.default.createDirectory(at: folder(meta.id), withIntermediateDirectories: true)
         save(meta)
         return meta
@@ -77,13 +97,20 @@ final class SessionStore {
         let motion = RawFiles.readMotion(motionURL(meta.id))
         var exporter = Exporter()
         exporter.options.device = deviceName()
+        exporter.options.extraMeta = meta.csvMeta
         guard let result = exporter.export(fixes: fixes, motion: motion, track: track) else {
             throw ExportError.notEnoughData
         }
-        let safeTrack = (meta.trackName ?? "session").replacingOccurrences(of: "[^A-Za-z0-9]+", with: "-", options: .regularExpression)
+        let safeTrack = (meta.isDrive ? "Drive" : meta.trackName ?? "session").replacingOccurrences(of: "[^A-Za-z0-9]+", with: "-", options: .regularExpression)
         let url = folder(meta.id).appendingPathComponent("Laptrace_\(safeTrack)_\(meta.id).csv")
         try result.csv.write(to: url, atomically: true, encoding: .utf8)
         return (url, result.summary)
+    }
+
+    /// Lap stats and one coaching goal, computed from the raw GPS file.
+    func debrief(_ meta: SessionMeta, track: Track?) -> Coach.Debrief? {
+        let laps = Exporter().coachLaps(fixes: RawFiles.readFixes(gpsURL(meta.id)), track: track)
+        return Coach.debrief(laps, trackName: meta.trackName)
     }
 
     enum ExportError: LocalizedError {

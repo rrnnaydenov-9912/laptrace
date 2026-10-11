@@ -102,6 +102,11 @@ export interface SessionSummary {
   timedLaps: number;
   durationS: number;
   center: LatLon;
+  favorite?: boolean;
+  /** True for a road drive (no laps). Missing on summaries saved before drive mode. */
+  drive?: boolean;
+  /** Metres, set for drives. */
+  distance?: number;
 }
 
 export type LapKind = 'out' | 'timed' | 'in' | 'pit' | 'run';

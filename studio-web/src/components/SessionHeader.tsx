@@ -32,6 +32,13 @@ export function SessionHeader({ rec, a }: Props) {
           <span>{LAP_SOURCE[a.lapSource]}</span>
           <span>Sectors: {SECTOR_SOURCE[a.sectorSource]}</span>
         </p>
+        {(rec.meta.Driver || rec.meta.Vehicle) && (
+          <p className="sh-meta sh-who">
+            {rec.meta.Driver && <span>Driver: <b>{rec.meta.Driver}</b></span>}
+            {rec.meta.Vehicle && <span>Car: <b>{rec.meta.Vehicle}</b></span>}
+          </p>
+        )}
+        {rec.meta.Notes && <p className="sh-notes">{rec.meta.Notes}</p>}
       </div>
       <div className="sh-kpis">
         <div><span>Best lap</span><b>{fmtLap(best?.time)}</b></div>

@@ -1,5 +1,6 @@
 // Session analysis: lap segmentation, lap slicing, sectors and summary statistics.
 
+import { driveStats, isDrive } from './drive';
 import { bearing, haversine, median } from './geo';
 import { findCrossings, valueAt } from './gates';
 import { lapsFromCrossings, lapsFromLabels, singleRun } from './laps';
@@ -214,5 +215,6 @@ export function summarize(rec: SessionRecord, a: SessionAnalysis): SessionSummar
     timedLaps: a.laps.filter((l) => l.kind === 'timed').length,
     durationS: n > 1 ? rec.channels.t[n - 1] - rec.channels.t[0] : 0,
     center: a.center,
+    ...(isDrive(rec, a) ? { drive: true, distance: driveStats(rec.channels).distance } : {}),
   };
 }

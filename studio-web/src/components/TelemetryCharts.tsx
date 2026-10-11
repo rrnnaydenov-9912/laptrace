@@ -7,7 +7,7 @@ import 'uplot/dist/uPlot.min.css';
 import { cursor, useCursor } from '../state/cursor';
 import { distanceAtTime, sampleAt, type AlignedLap } from '../lib/alignment';
 import type { Workspace } from '../lib/workspace';
-import { fmtDelta, fmtDist, fmtSpeed } from '../lib/format';
+import { fmtDelta, fmtDist, fmtSpeed, speedFactor, speedUnit } from '../lib/format';
 import type { LapData } from '../lib/types';
 
 interface Props {
@@ -33,11 +33,11 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
-function toSeries(arr: ArrayLike<number> | null | undefined, n: number): (number | null)[] {
+function toSeries(arr: ArrayLike<number> | null | undefined, n: number, k = 1): (number | null)[] {
   const out = new Array<number | null>(n);
   for (let i = 0; i < n; i++) {
     const v = arr ? arr[i] : NaN;
-    out[i] = Number.isFinite(v) ? v : null;
+    out[i] = Number.isFinite(v) ? v * k : null;
   }
   return out;
 }
@@ -63,7 +63,7 @@ function Panel({
     if (!host) return;
     const n = ws.ref.s.length;
     const xs = Array.from(ws.ref.s);
-    const data: uPlot.AlignedData = [xs, ...laps.map((l) => toSeries(l[id], n))];
+    const data: uPlot.AlignedData = [xs, ...laps.map((l) => toSeries(l[id], n, id === 'speed' ? speedFactor() : 1))];
     const grid = cssVar('--grid', 'rgba(128,128,128,.15)');
     const axis = cssVar('--muted', '#888');
     const axisCfg = { stroke: axis, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, font: '11px system-ui, sans-serif' };
@@ -154,7 +154,7 @@ function Panel({
 
   return (
     <div className="chart-panel">
-      <div className="chart-title">{title} <span>{unit}</span></div>
+      <div className="chart-title">{title} <span>{id === 'speed' ? speedUnit() : unit}</span></div>
       <div ref={el} className="chart-host" />
     </div>
   );
@@ -172,7 +172,7 @@ function Readout({ ws, laps, labels, colors }: { ws: Workspace; laps: AlignedLap
         return (
           <span key={l.key} className="readout-item">
             <i style={{ background: colors.get(l.key) }} />
-            {labels.get(l.key)} <b>{fmtSpeed(v)}</b> km/h{l.key !== ws.refKey && <em className={d > 0 ? 'neg' : 'pos'}>{fmtDelta(d, 2)}</em>}
+            {labels.get(l.key)} <b>{fmtSpeed(v)}</b> {speedUnit()}{l.key !== ws.refKey && <em className={d > 0 ? 'neg' : 'pos'}>{fmtDelta(d, 2)}</em>}
           </span>
         );
       })}

@@ -16,6 +16,9 @@ Time,Lap,Latitude,Longitude,Altitude (m),Speed (km/h),Heading (deg),Longitudinal
 
 ## Layout
 - **Metadata**: `Key,Value` rows first, then one blank line, then the header row. Rows starting with `#` are comments.
+  - `Mode`: `Drive` for a road drive (no laps or track; Studio shows the drive view), `Track` otherwise. Missing in older files; readers then treat a recording with no track and no laps as a drive.
+  - Optional keys, written only when filled in: `Driver`, `Vehicle`, `Notes`, `Video Start UTC` (ISO 8601, the moment "Mark video start" was tapped; use it to sync onboard video).
+  - These free-text values are always wrapped in double quotes, with inner quotes doubled (`"Ana ""Ace"" P."`), so commas are safe. Line breaks are folded into single spaces, so every metadata row stays on one line.
 - **Delimiter**: comma. Studio also accepts `;`, tab and `|`.
 
 ## Columns

@@ -7,7 +7,8 @@ import 'leaflet/dist/leaflet.css';
 import { cursor } from '../state/cursor';
 import { sampleAt } from '../lib/alignment';
 import { nearestS, positionAtTime, type Workspace } from '../lib/workspace';
-import { speedColor } from '../lib/format';
+import { fmtSpeed, fmtSpeedU, speedColor } from '../lib/format';
+import { DRIVE_ACCEL, DRIVE_BRAKE, driveStates } from '../lib/insights';
 import type { Gate, LapData, LatLon } from '../lib/types';
 
 interface Props {
@@ -27,6 +28,26 @@ interface Props {
 
 const OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+const PEDAL_COLORS = ['#7d8ca3', '#e5484d', '#30a46c'];
+
+/** Split the lap into runs of braking / accelerating / coasting. */
+function pedalSegments(lap: LapData): { color: string; pts: L.LatLngTuple[] }[] {
+  const st = driveStates(lap);
+  const out: { color: string; pts: L.LatLngTuple[] }[] = [];
+  let cur: L.LatLngTuple[] = [];
+  let state = -1;
+  for (let i = 0; i < lap.lat.length; i++) {
+    const p: L.LatLngTuple = [lap.lat[i], lap.lon[i]];
+    if (st[i] !== state) {
+      if (cur.length) { cur.push(p); out.push({ color: PEDAL_COLORS[state], pts: cur }); }
+      cur = [p];
+      state = st[i];
+    } else cur.push(p);
+  }
+  if (cur.length > 1) out.push({ color: PEDAL_COLORS[state], pts: cur });
+  return out;
+}
 
 function speedSegments(lap: LapData, buckets = 28): { color: string; pts: L.LatLngTuple[] }[] {
   const out: { color: string; pts: L.LatLngTuple[] }[] = [];
@@ -56,6 +77,7 @@ export function TrackMap(props: Props) {
   const wsRef = useRef(ws);
   const lapsRef = useRef<{ focus: LapData | null; overlays: LapData[]; colors: Map<string, string> }>({ focus, overlays, colors });
   const [drawing, setDrawing] = useState(false);
+  const [mode, setMode] = useState<'speed' | 'pedal'>('speed');
   const drawingRef = useRef(false);
   const draftPts = useRef<LatLon[]>([]);
   const defineRef = useRef(onDefineGate);
@@ -137,11 +159,11 @@ export function TrackMap(props: Props) {
       L.polyline(Array.from(focus.lat, (la, i) => [la, focus.lon[i]] as L.LatLngTuple), {
         color: '#0b0d12', weight: 7, opacity: 0.55, interactive: false,
       }).addTo(g.lines);
-      for (const seg of speedSegments(focus)) {
+      for (const seg of mode === 'pedal' ? pedalSegments(focus) : speedSegments(focus)) {
         L.polyline(seg.pts, { color: seg.color, weight: 4, opacity: 1, interactive: false, lineCap: 'butt' }).addTo(g.lines);
       }
     }
-  }, [focus, overlays, colors]);
+  }, [focus, overlays, colors, mode]);
 
   // Gates and corners.
   useEffect(() => {
@@ -210,6 +232,12 @@ export function TrackMap(props: Props) {
     <div className="map-wrap">
       <div ref={el} className={`map ${drawing ? 'map--drawing' : ''}`} />
       <div className="map-tools">
+        {focus && (
+          <button type="button" className="btn btn--small" aria-pressed={mode === 'pedal'} onClick={() => setMode((m) => (m === 'speed' ? 'pedal' : 'speed'))}
+            title="Switch the lap colouring between speed and braking/throttle">
+            {mode === 'speed' ? 'Colour: speed' : 'Colour: pedals'}
+          </button>
+        )}
         {canDefineGate && (
           <button type="button" className={`btn btn--small ${drawing ? 'btn--accent' : ''}`} onClick={startDrawing}>
             {drawing ? 'Cancel' : 'Set start/finish'}
@@ -222,11 +250,18 @@ export function TrackMap(props: Props) {
       {drawing && (
         <div className="map-hint">Click two points on either side of the track to draw the start/finish line.</div>
       )}
-      {focus && (
+      {focus && mode === 'pedal' && (
+        <div className="map-legend map-legend--pedal" aria-hidden>
+          <span><b style={{ background: PEDAL_COLORS[DRIVE_BRAKE] }} />Braking</span>
+          <span><b style={{ background: PEDAL_COLORS[DRIVE_ACCEL] }} />Throttle</span>
+          <span><b style={{ background: PEDAL_COLORS[0] }} />Coast</span>
+        </div>
+      )}
+      {focus && mode === 'speed' && (
         <div className="map-legend" aria-hidden>
-          <span>{Math.round(focus.minSpeed)}</span>
+          <span>{fmtSpeed(focus.minSpeed)}</span>
           <i />
-          <span>{Math.round(focus.maxSpeed)} km/h</span>
+          <span>{fmtSpeedU(focus.maxSpeed)}</span>
         </div>
       )}
     </div>

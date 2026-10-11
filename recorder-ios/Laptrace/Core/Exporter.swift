@@ -14,6 +14,7 @@ struct Exporter {
         var maxGap: Double = 3            // no rows inside GPS gaps longer than this (s)
         var gWindow: Double = 0.15        // ± seconds averaged per g-force row
         var device: String = "iPhone"
+        var extraMeta: [(key: String, value: String)] = []   // optional Driver / Vehicle / Notes / Video Start UTC
     }
 
     struct Calibration {
@@ -65,6 +66,22 @@ struct Exporter {
         let laps = labelLaps(&rows, track: track)
         let summary = Summary(rows: rows.count, duration: rows.last!.t - rows.first!.t, laps: laps, calibration: cal, track: track)
         return (render(rows, summary: summary), summary)
+    }
+
+    /// Interpolated laps (local metres) for the debrief; no g-force work.
+    func coachLaps(fixes rawFixes: [GPSFix], track: Track?) -> [Coach.Lap] {
+        let fixes = clean(rawFixes)
+        guard fixes.count >= 2 else { return [] }
+        let proj = LocalProjection(origin: fixes[0].latLon)
+        var rows = interpolate(fixes, proj: proj)
+        let laps = labelLaps(&rows, track: track)
+        let groups = Dictionary(grouping: rows.filter { $0.lap > 0 }, by: \.lap)
+        return groups.keys.sorted().compactMap { n in
+            guard let r = groups[n], r.count >= 2 else { return nil }
+            let pts = r.map { proj.project($0.p) }
+            let duration = n <= laps.count ? laps[n - 1].duration : r.last!.t - r.first!.t
+            return Coach.Lap(number: n, duration: duration, t: r.map(\.t), x: pts.map(\.x), y: pts.map(\.y), speed: r.map(\.speed))
+        }
     }
 
     // MARK: - Fix cleaning
@@ -257,6 +274,9 @@ struct Exporter {
         s += meta("G-Force Source", summary.calibration.source)
         s += meta("Lateral Sign", "positive = right turn")
         if let best = summary.best { s += meta("Best Lap", String(format: "Lap %d %.3f s", best.number, best.duration)) }
+        for (k, v) in options.extraMeta where !v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            s += "\(k),\(Exporter.quoted(v))\n"
+        }
         s += "\n"
         var header = ["Time"]
         if hasLaps { header.append("Lap") }
@@ -274,6 +294,15 @@ struct Exporter {
             s += line
         }
         return s
+    }
+}
+
+extension Exporter {
+    /// A metadata value as one quoted CSV field: inner quotes doubled, line breaks folded to spaces.
+    static func quoted(_ v: String) -> String {
+        let oneLine = v.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        return "\"" + oneLine.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }
 

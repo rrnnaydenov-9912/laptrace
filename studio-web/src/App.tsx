@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AICoachPanel } from './components/AICoachPanel';
 import { CoachPanel } from './components/CoachPanel';
+import { CornerExplainer } from './components/CornerExplainer';
+import { DriveView } from './components/DriveView';
+import { GoalCard } from './components/GoalCard';
+import { OpportunitiesPanel } from './components/OpportunitiesPanel';
+import { VideoPanel } from './components/VideoPanel';
 import { CornerTable } from './components/CornerTable';
 import { GGDiagram } from './components/GGDiagram';
 import { DropZone, ReportCard, type ImportOutcome } from './components/ImportPanel';
@@ -11,9 +17,12 @@ import { TopBar } from './components/TopBar';
 import { TrackMap } from './components/TrackMap';
 import { analyzeSession, summarize } from './lib/analysis';
 import { coachLap, coachReference, consistency, type LapCornerStats } from './lib/coach';
-import { fmtDate, LAP_PALETTE } from './lib/format';
+import { buildFacts } from './lib/aicoach';
+import { isDrive } from './lib/drive';
+import { fmtDate, LAP_PALETTE, setSpeedUnit, type SpeedUnit } from './lib/format';
+import { bestConsecutive, evaluateGoal, opportunities, outlierKeys, suggestGoal, targetTime, type Goal } from './lib/insights';
 import {
-  deleteSession, deleteUserTrack, listSummaries, listUserTracks, loadSession, saveSession, saveUserTrack,
+  clearGoal, deleteSession, deleteUserTrack, listSummaries, listUserTracks, loadGoal, loadSession, saveGoal, saveSession, saveSummary, saveUserTrack,
 } from './lib/storage';
 import { BUILTIN_TRACKS, gateFromPoints, makeUserTrack } from './lib/tracks';
 import type { LapData, LatLon, SessionSummary, TrackDef } from './lib/types';
@@ -32,6 +41,29 @@ function initialTheme(): Theme {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function initialUnits(): SpeedUnit {
+  let u: SpeedUnit = 'kmh';
+  try { if (localStorage.getItem('laptrace-units') === 'mph') u = 'mph'; } catch { /* storage unavailable */ }
+  setSpeedUnit(u);
+  return u;
+}
+
+/** Timed laps of a session. */
+const timedLaps = (s: LoadedSession) => s.a.laps.filter((l) => l.kind === 'timed');
+
+/** Write the lap times of a session as a CSV the user can open in a spreadsheet. */
+function exportLapsCsv(s: LoadedSession, excluded: Set<string>) {
+  const rows = [['Lap', 'Time (s)', 'Distance (m)', 'Top speed (km/h)', 'Excluded']];
+  for (const l of timedLaps(s)) rows.push([l.label, l.time.toFixed(3), l.length.toFixed(0), l.maxSpeed.toFixed(1), excluded.has(l.key) ? 'yes' : '']);
+  const csv = rows.map((r) => r.map((c) => (/[",]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${s.rec.name.replace(/[^\w.-]+/g, '_')}-laps.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /** Default lap selection for a fresh session: the best lap, else the longest run. */
 function defaultLap(s: LoadedSession): LapData | null {
   const { a } = s;
@@ -41,6 +73,9 @@ function defaultLap(s: LoadedSession): LapData | null {
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [units, setUnits] = useState<SpeedUnit>(initialUnits);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [savedGoal, setSavedGoal] = useState<Goal | null>(null);
   const [summaries, setSummaries] = useState<SessionSummary[]>([]);
   const [userTracks, setUserTracks] = useState<TrackDef[]>([]);
   const [current, setCurrent] = useState<LoadedSession | null>(null);
@@ -63,6 +98,11 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    setSpeedUnit(units);
+    try { localStorage.setItem('laptrace-units', units); } catch { /* ignore */ }
+  }, [units]);
+
+  useEffect(() => {
     Promise.all([listSummaries(), listUserTracks()])
       .then(([s, t]) => { setSummaries(s); setUserTracks(t); })
       .catch(() => { /* IndexedDB unavailable: app still works for this visit */ })
@@ -76,6 +116,7 @@ export default function App() {
     setSelected(lap ? [lap.key] : []);
     setRefKey(lap?.key ?? null);
     setFocusKey(lap?.key ?? null);
+    setExcluded(outlierKeys(timedLaps(s)));
     setShowImport(false);
     setLibOpen(false);
     cursor.clear();
@@ -147,6 +188,23 @@ export default function App() {
     if (current?.rec.id === id) { setCurrent(null); setSelected([]); setRefKey(null); setFocusKey(null); }
     setCompared((c) => c.filter((x) => x.rec.id !== id));
   }, [current]);
+
+  const trackId = current?.a.track?.id ?? null;
+  useEffect(() => {
+    setSavedGoal(null);
+    if (!trackId) return;
+    let live = true;
+    loadGoal(trackId).then((g) => { if (live) setSavedGoal(g ?? null); }).catch(() => {});
+    return () => { live = false; };
+  }, [trackId]);
+
+  const favorite = useCallback(async (id: string, fav: boolean) => {
+    const sum = summaries.find((s) => s.id === id);
+    if (!sum) return;
+    const next = { ...sum, favorite: fav };
+    setSummaries((ss) => ss.map((s) => (s.id === id ? next : s)));
+    await saveSummary(next).catch(() => {});
+  }, [summaries]);
 
   // Re-analyse the current session after its timing line changes.
   const reanalyse = useCallback(async (s: LoadedSession, nextTracks: TrackDef[]) => {
@@ -255,9 +313,42 @@ export default function App() {
 
   const cons = useMemo(() => {
     if (!current || !ws) return null;
-    const ls = current.a.laps.filter((l) => l.kind === 'timed').map(lapStats).filter((x): x is LapCornerStats => !!x);
+    const ls = timedLaps(current).filter((l) => !excluded.has(l.key)).map(lapStats).filter((x): x is LapCornerStats => !!x);
     return ls.length ? consistency(ls) : null;
-  }, [current, ws, lapStats]);
+  }, [current, ws, lapStats, excluded]);
+
+  // ---- insights: where the time is, target lap, goals, AI facts -----------
+  const includedTimed = useMemo(() => (current ? timedLaps(current).filter((l) => !excluded.has(l.key)) : []), [current, excluded]);
+  const includedStats = useMemo(() => includedTimed.map(lapStats).filter((x): x is LapCornerStats => !!x), [includedTimed, lapStats]);
+  const opps = useMemo(() => {
+    const ref = refLap ? lapStats(refLap) : null;
+    return ref ? opportunities(ref, includedStats) : [];
+  }, [refLap, lapStats, includedStats]);
+  const target = useMemo(() => (refLap && opps.length ? targetTime(refLap.time, opps) : null), [refLap, opps]);
+  const bestThree = useMemo(() => bestConsecutive(includedTimed), [includedTimed]);
+  const goalProgress = useMemo(() => (savedGoal && ws ? evaluateGoal(savedGoal, ws, includedStats, cons?.lapTimeSd ?? null) : null), [savedGoal, ws, includedStats, cons]);
+  const nextGoal = useMemo(() => {
+    if (!ws || !current?.a.track) return null;
+    return suggestGoal({
+      ws, opps, lapTimeSd: cons?.lapTimeSd ?? null, lapCount: includedTimed.length,
+      trackId: current.a.track.id, trackName: current.a.track.name, sessionId: current.rec.id,
+    });
+  }, [ws, opps, cons, includedTimed, current]);
+  const facts = useMemo(() => {
+    if (!current || !cons || !refLap) return null;
+    return buildFacts({
+      track: current.a.track?.name ?? null,
+      date: current.rec.date,
+      vehicle: current.rec.meta.Vehicle ?? null,
+      timedLaps: timedLaps(current).map((l) => ({ label: l.label, time: l.time, excluded: excluded.has(l.key) })),
+      reference: { label: labels.get(refLap.key) ?? refLap.label, time: refLap.time },
+      target, bestThree, opps, cons,
+      goal: savedGoal, goalProgress, nextGoal,
+      lowRateGps: current.a.lowRateGps,
+    });
+    // units: facts carry speeds in the display unit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, cons, refLap, labels, target, bestThree, opps, savedGoal, goalProgress, nextGoal, excluded, units]);
 
   const tips = useMemo(() => {
     if (!ws || !focusLap || !refLap) return [];
@@ -277,6 +368,36 @@ export default function App() {
     setSelected((sel) => (sel.includes(key) ? sel.filter((k) => k !== key) : sel.length < MAX_SELECTED ? [...sel, key] : sel));
   }, []);
 
+  // Keyboard: ← / → step through laps, r makes the focused lap the reference, t switches theme.
+  const keyState = useRef({ current, focusLap, refLap });
+  keyState.current = { current, focusLap, refLap };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName))) return;
+      const { current: cur, focusLap: f } = keyState.current;
+      if (e.key === 't') { setTheme((t) => (t === 'dark' ? 'light' : 'dark')); return; }
+      if (!cur || !f) return;
+      if (e.key === 'r') { setRefKey(f.key); return; }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const laps = cur.a.laps;
+        const i = laps.findIndex((l) => l.key === f.key);
+        if (i < 0) return;
+        const j = i + (e.key === 'ArrowRight' ? 1 : -1);
+        if (j < 0 || j >= laps.length) return;
+        e.preventDefault();
+        setFocusKey(laps[j].key);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const toggleExcluded = useCallback((key: string) => {
+    setExcluded((ex) => { const n = new Set(ex); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  }, []);
+
   const groups: LapGroup[] = allSessions.map((s) => ({
     title: s === current ? `${s.rec.name} (this session)` : `${s.rec.name} · ${fmtDate(s.rec.date)}`,
     analysis: s.a,
@@ -288,6 +409,8 @@ export default function App() {
   const focusSessionLowRate = focusLap ? lapIndex.get(focusLap.key)?.s.a.lowRateGps ?? false : false;
 
   const importView = showImport || !current;
+  const drive = current ? isDrive(current.rec, current.a) : false;
+  const videoStart = current?.rec.meta['Video Start UTC'] ? Date.parse(current.rec.meta['Video Start UTC']) / 1000 : NaN;
 
   return (
     <div className={`app ${libOpen ? 'lib-open' : ''}`}>
@@ -297,6 +420,8 @@ export default function App() {
         onImport={() => { setShowImport(true); setLibOpen(false); setTimeout(() => fileInputClick.current(), 0); }}
         onLibrary={() => setLibOpen((o) => !o)}
         libraryOpen={libOpen}
+        units={units}
+        onUnits={() => setUnits((u) => (u === 'kmh' ? 'mph' : 'kmh'))}
       />
       <div className="layout">
         <aside className="sidebar" aria-label="Session library">
@@ -306,6 +431,7 @@ export default function App() {
             onOpen={(id) => void openSession(id)}
             onRename={(id, n) => void rename(id, n)}
             onDelete={(id) => void remove(id)}
+            onFavorite={(id, f) => void favorite(id, f)}
             onImport={() => { setShowImport(true); setLibOpen(false); }}
           />
         </aside>
@@ -334,7 +460,13 @@ export default function App() {
               )}
             </section>
           )}
-          {current && !showImport && (
+          {current && !showImport && drive && (
+            <>
+              <SessionHeader rec={current.rec} a={current.a} />
+              <DriveView key={`${current.rec.id}-${units}`} rec={current.rec} a={current.a} theme={theme} />
+            </>
+          )}
+          {current && !showImport && !drive && (
             <>
               <SessionHeader rec={current.rec} a={current.a} />
               <div className="grid-top">
@@ -366,6 +498,29 @@ export default function App() {
                     onFocus={(k) => setFocusKey(k)}
                     onRemoveGroup={removeCompare}
                   />
+                  {timedLaps(current).length > 1 && (
+                    <div className="lap-filter">
+                      <div className="lap-filter-head">
+                        <span>Laps counted in the stats</span>
+                        <button type="button" className="link" onClick={() => exportLapsCsv(current, excluded)}>Export lap times</button>
+                      </div>
+                      <div className="chips">
+                        {timedLaps(current).map((l) => (
+                          <button
+                            key={l.key}
+                            type="button"
+                            className={`chip chip-btn ${excluded.has(l.key) ? 'chip--muted' : ''}`}
+                            aria-pressed={!excluded.has(l.key)}
+                            title={excluded.has(l.key) ? 'Not counted. Click to include.' : 'Counted. Click to leave out (e.g. traffic or a spin).'}
+                            onClick={() => toggleExcluded(l.key)}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="hint">Unusually slow laps are left out automatically. Shortcuts: ← → change lap, r sets reference, t switches theme.</p>
+                    </div>
+                  )}
                   {comparable.length > 0 && (
                     <div className="compare">
                       <label htmlFor="compare-select">Compare with another session at {current.a.track?.name}</label>
@@ -383,8 +538,20 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {ws && refLap && (
+                <OpportunitiesPanel
+                  ws={ws}
+                  refLabel={labels.get(refLap.key) ?? refLap.label}
+                  refTime={refLap.time}
+                  opps={opps}
+                  target={target}
+                  bestThree={bestThree}
+                  lowRateGps={current.a.lowRateGps}
+                />
+              )}
               {ws && (
                 <TelemetryCharts
+                  key={units}
                   ws={ws}
                   laps={shownLaps}
                   colors={colors}
@@ -407,6 +574,25 @@ export default function App() {
                     lowRateGps={focusSessionLowRate}
                   />
                 </div>
+              )}
+              {ws && focusLap && (
+                <div className="grid-insights">
+                  <CornerExplainer ws={ws} focusKey={focusLap.key} focusLabel={focusLabel} />
+                  {current.a.track && (
+                    <GoalCard
+                      trackName={current.a.track.name}
+                      saved={savedGoal}
+                      progress={goalProgress}
+                      next={nextGoal}
+                      onSave={(g) => { setSavedGoal(g); void saveGoal(g).catch(() => {}); }}
+                      onClear={() => { const id = current.a.track!.id; setSavedGoal(null); void clearGoal(id).catch(() => {}); }}
+                    />
+                  )}
+                </div>
+              )}
+              {facts && <AICoachPanel key={`${current.rec.id}-${units}`} facts={facts} fallback={tips.map((t) => t.text)} />}
+              {ws && focusLap && (
+                <VideoPanel ws={ws} lap={focusLap} videoStartUtc={Number.isFinite(videoStart) ? videoStart : null} />
               )}
             </>
           )}
