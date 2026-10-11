@@ -1,92 +1,139 @@
-// One corner drawn from your reference lap, with where you braked, turned in,
-// reached the apex and picked up the throttle. A teaching view for new drivers.
+// One corner, two lines: the coached lap against a quicker lap (the reference, or the
+// fastest lap through that corner). Shows where each braked, how slow each got, where each
+// picked up the throttle, and replays both through the corner so the gap is visible.
 
 import { useEffect, useMemo, useState } from 'react';
 import { cursor } from '../state/cursor';
-import { fmtSpeed, speedUnit } from '../lib/format';
+import { compareSentence, fastestThrough } from '../lib/cornerLines';
+import { fmtSpeedU, speedFactor, speedUnit } from '../lib/format';
+import type { CornerStats } from '../lib/corners';
 import type { Workspace } from '../lib/workspace';
+import { CornerLines } from './CornerLines';
 
-interface Props { ws: Workspace; focusKey: string; focusLabel: string }
+export interface ExplainRequest { corner: number; vsKey: string | null; n: number }
 
-const W = 320, H = 220, PAD = 22;
-
-function idxAt(s: Float64Array, v: number): number {
-  let lo = 0, hi = s.length - 1;
-  while (lo < hi) { const m = (lo + hi) >> 1; if (s[m] < v) lo = m + 1; else hi = m; }
-  return lo;
+interface Props {
+  ws: Workspace;
+  focusKey: string;
+  focusLabel: string;
+  labels: Map<string, string>;
+  request: ExplainRequest | null;
 }
 
-export function CornerExplainer({ ws, focusKey, focusLabel }: Props) {
+const FASTEST = '__fastest';
+
+const fin = (v: number | undefined | null): v is number => typeof v === 'number' && Number.isFinite(v);
+const metres = (v: number) => `${Math.round(v)} m`;
+
+export function CornerExplainer({ ws, focusKey, focusLabel, labels, request }: Props) {
   const [num, setNum] = useState<number>(ws.corners[0]?.number ?? 0);
-  const corner = ws.corners.find((c) => c.number === num) ?? ws.corners[0];
-  const stats = ws.stats.get(focusKey)?.find((c) => c.corner === corner?.number);
-  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const [t, setT] = useState(0);
+  // Coaching a lap other than the reference: compare it with the reference by default.
+  const defaultVs = focusKey !== ws.refKey ? ws.refKey : FASTEST;
+  const [vs, setVs] = useState<string>(defaultVs);
+  useEffect(() => setVs(defaultVs), [defaultVs]);
 
   useEffect(() => {
-    if (reduced) return;
-    let raf = 0; const t0 = performance.now();
-    const tick = (now: number) => { setT(((now - t0) / 4000) % 1); raf = requestAnimationFrame(tick); };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [reduced]);
+    if (!request) return;
+    setNum(request.corner);
+    setVs(request.vsKey ?? FASTEST);
+  }, [request]);
 
-  const geom = useMemo(() => {
-    if (!corner) return null;
-    const { s, x, y } = ws.ref;
-    const a = idxAt(s, Math.max(corner.zoneStart, (stats && Number.isFinite(stats.brakeS) ? stats.brakeS : corner.sStart) - 40));
-    const b = idxAt(s, Math.min(corner.zoneEnd, (stats && Number.isFinite(stats.throttleS) ? stats.throttleS : corner.sEnd) + 60));
-    if (b - a < 3) return null;
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (let i = a; i <= b; i++) { x0 = Math.min(x0, x[i]); x1 = Math.max(x1, x[i]); y0 = Math.min(y0, y[i]); y1 = Math.max(y1, y[i]); }
-    const k = Math.min((W - 2 * PAD) / Math.max(1, x1 - x0), (H - 2 * PAD) / Math.max(1, y1 - y0));
-    const ox = (W - (x1 - x0) * k) / 2, oy = (H - (y1 - y0) * k) / 2;
-    const P = (i: number): [number, number] => [ox + (x[i] - x0) * k, H - (oy + (y[i] - y0) * k)];
-    const pts: [number, number][] = [];
-    for (let i = a; i <= b; i++) pts.push(P(i));
-    const at = (sv: number) => (Number.isFinite(sv) ? P(Math.min(b, Math.max(a, idxAt(s, sv)))) : null);
-    return { a, b, pts, at };
-  }, [ws, corner, stats]);
+  const corner = ws.corners.find((c) => c.number === num) ?? ws.corners[0];
+  const others = useMemo(() => [...ws.aligned.keys()].filter((k) => k !== focusKey), [ws, focusKey]);
+  const vsKey = !corner ? null
+    : vs === FASTEST ? fastestThrough(ws, corner.number, focusKey)
+    : ws.aligned.has(vs) && vs !== focusKey ? vs : null;
 
-  if (!corner || !geom) return null;
-  const marks = [
-    { key: 'brake', label: 'Brake', p: stats ? geom.at(stats.brakeS) : null, cls: 'mk-brake' },
-    { key: 'turn', label: 'Turn in', p: geom.at(corner.sStart), cls: 'mk-turn' },
-    { key: 'apex', label: 'Slowest', p: geom.at(stats ? stats.minS : corner.sApex), cls: 'mk-apex' },
-    { key: 'throttle', label: 'Throttle', p: stats ? geom.at(stats.throttleS) : null, cls: 'mk-throttle' },
+  if (!corner) return null;
+  const statsOf = (k: string | null): CornerStats | null => (k ? ws.stats.get(k)?.find((c) => c.corner === corner.number) ?? null : null);
+  const a = statsOf(focusKey), b = statsOf(vsKey);
+  const vsLabel = vsKey ? labels.get(vsKey) ?? vsKey : '';
+  const unit = speedUnit();
+  const speedDiff = (v: number) => `${(v * speedFactor()).toFixed(0)} ${unit}`;
+
+  const rows: [string, (s: CornerStats) => string, (s: CornerStats) => number | null, 'higher' | 'lower' | 'later' | 'sooner'][] = [
+    ['Speed on entry', (s) => fmtSpeedU(s.entrySpeed), (s) => s.entrySpeed, 'higher'],
+    ['Braking starts', (s) => (fin(s.brakeS) ? `${metres(s.minS - s.brakeS)} before slowest` : '—'), (s) => (fin(s.brakeS) ? s.brakeS : null), 'later'],
+    ['Slowest point', (s) => fmtSpeedU(s.minSpeed), (s) => s.minSpeed, 'higher'],
+    ['Throttle back on', (s) => (fin(s.throttleS) ? `${metres(s.throttleS - s.minS)} after slowest` : '—'), (s) => (fin(s.throttleS) ? s.throttleS : null), 'sooner'],
+    ['Speed on exit', (s) => fmtSpeedU(s.exitSpeed), (s) => s.exitSpeed, 'higher'],
+    ['Time through the corner', (s) => `${s.zoneTime.toFixed(2)} s`, (s) => s.zoneTime, 'lower'],
   ];
-  const dot = geom.pts[Math.floor((reduced ? 0.5 : t) * (geom.pts.length - 1))];
-  const path = geom.pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  // Only mark a winner when the difference shows at the precision on screen.
+  const better = (dir: string, x: number | null, y: number | null) => {
+    if (x == null || y == null) return false;
+    const eps = dir === 'lower' ? 0.005 : dir === 'higher' ? 0.5 / speedFactor() : 0.5;
+    return dir === 'higher' || dir === 'later' ? x > y + eps : x < y - eps;
+  };
+  const okA = !!a?.valid, okB = !!b?.valid;
 
   return (
-    <section className="card explainer">
+    <section className="card explainer" id="corner-explainer">
       <header className="card-head">
         <h2>Corner by corner</h2>
-        <label className="hint" htmlFor="explainer-corner">Lap {focusLabel} · </label>
-        <select id="explainer-corner" value={corner.number} onChange={(e) => { const n = Number(e.target.value); setNum(n); const c = ws.corners.find((x) => x.number === n); if (c) cursor.set({ s: c.sApex, time: null, src: 'explainer' }); }}>
+      </header>
+      <div className="ex-controls">
+        <label htmlFor="explainer-corner">Corner</label>
+        <select
+          id="explainer-corner"
+          value={corner.number}
+          onChange={(e) => {
+            const n = Number(e.target.value); setNum(n);
+            const c = ws.corners.find((x) => x.number === n);
+            if (c) cursor.set({ s: c.sApex, time: null, src: 'explainer' });
+          }}
+        >
           {ws.corners.map((c) => <option key={c.number} value={c.number}>Turn {c.number} ({c.direction === 'L' ? 'left' : 'right'}, {Math.round(c.angle)}°)</option>)}
         </select>
-      </header>
-      <svg viewBox={`0 0 ${W} ${H}`} className="explainer-svg" role="img" aria-label={`Turn ${corner.number} with braking, turn-in, slowest point and throttle markers`}>
-        <path d={path} className="ex-track" />
-        <path d={path} className="ex-line" />
-        {marks.map((m) => m.p && (
-          <g key={m.key} className={m.cls}>
-            <circle cx={m.p[0]} cy={m.p[1]} r="6" />
-            <text x={m.p[0] + 9} y={m.p[1] - 8}>{m.label}</text>
-          </g>
-        ))}
-        {dot && <circle cx={dot[0]} cy={dot[1]} r="4.5" className="ex-dot" />}
-      </svg>
-      {stats && stats.valid ? (
-        <dl className="ex-figs">
-          <div><dt>Entry</dt><dd>{fmtSpeed(stats.entrySpeed)} {speedUnit()}</dd></div>
-          <div><dt>Slowest</dt><dd>{fmtSpeed(stats.minSpeed)} {speedUnit()}</dd></div>
-          <div><dt>Exit</dt><dd>{fmtSpeed(stats.exitSpeed)} {speedUnit()}</dd></div>
-          <div><dt>Brake → slowest</dt><dd>{Number.isFinite(stats.brakeS) ? `${Math.round(stats.minS - stats.brakeS)} m` : '—'}</dd></div>
-        </dl>
-      ) : <p className="hint">No clean data for this lap in turn {corner.number}.</p>}
-      <p className="footnote">Brake in a straight line, turn in once the braking is mostly done, and squeeze the throttle only once you can see the exit. The shape is drawn from your reference lap.</p>
+        <label htmlFor="explainer-vs">Compare with</label>
+        <select id="explainer-vs" value={vs} onChange={(e) => setVs(e.target.value)}>
+          <option value={FASTEST}>Fastest lap in this corner</option>
+          {others.map((k) => <option key={k} value={k}>Lap {labels.get(k) ?? k}{k === ws.refKey ? ' (reference)' : ''}</option>)}
+        </select>
+      </div>
+      <ul className="ex-legend" aria-label="Legend">
+        <li className="cl-a"><i className="sw" />Lap {focusLabel}</li>
+        {vsKey && <li className="cl-b"><i className="sw" />Lap {vsLabel}</li>}
+        <li><i className="sh sh-brake" />brake</li>
+        <li><i className="sh sh-slow" />slowest</li>
+        <li><i className="sh sh-throttle" />throttle</li>
+      </ul>
+      <CornerLines
+        ws={ws}
+        corner={corner}
+        keys={[focusKey, vsKey]}
+        variant="full"
+        label={`Turn ${corner.number}: lap ${focusLabel}${vsKey ? ` and lap ${vsLabel}` : ''} with their brake, slowest and throttle points`}
+      />
+      {okA && okB && vsKey ? (
+        <>
+          <p className="ex-verdict">{compareSentence(a!, b!, vsLabel, speedDiff)}</p>
+          <div className="ex-table-wrap">
+            <table className="ex-table">
+              <thead><tr><th scope="col" /><th scope="col" className="cl-a">Lap {focusLabel}</th><th scope="col" className="cl-b">Lap {vsLabel}</th></tr></thead>
+              <tbody>
+                {rows.map(([name, show, val, dir]) => (
+                  <tr key={name}>
+                    <th scope="row">{name}</th>
+                    <td className={better(dir, val(a!), val(b!)) ? 'win' : ''}>{show(a!)}</td>
+                    <td className={better(dir, val(b!), val(a!)) ? 'win' : ''}>{show(b!)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <p className="hint">
+          {!okA ? `No clean data for lap ${focusLabel} in turn ${corner.number}.`
+            : !vsKey ? 'No other lap has clean data in this corner yet. Add laps to the comparison.'
+            : `No clean data for lap ${vsLabel} in turn ${corner.number}.`}
+        </p>
+      )}
+      <p className="footnote">
+        The band is the track as driven on your reference lap. Phone GPS lines are accurate to a couple of metres, so read the shape of the line rather than its exact position.
+        Brake in a straight line, turn in once most of the braking is done, and pick up the throttle once you can see the exit.
+      </p>
     </section>
   );
 }

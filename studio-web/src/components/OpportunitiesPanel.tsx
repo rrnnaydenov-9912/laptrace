@@ -4,6 +4,7 @@ import { cursor } from '../state/cursor';
 import { fmtDelta, fmtLap, fmtSpeed, speedUnit } from '../lib/format';
 import { causeLabel, type Opportunity } from '../lib/insights';
 import type { Workspace } from '../lib/workspace';
+import { CornerLines } from './CornerLines';
 
 interface Props {
   ws: Workspace;
@@ -13,6 +14,7 @@ interface Props {
   target: { time: number; gain: number; corners: number[] } | null;
   bestThree: { total: number; avg: number; from: string; to: string } | null;
   lowRateGps: boolean;
+  onExplain: (corner: number, vsKey: string | null) => void;
 }
 
 function causeValues(o: Opportunity, sApex: number): string | null {
@@ -23,7 +25,7 @@ function causeValues(o: Opportunity, sApex: number): string | null {
   return null;
 }
 
-export function OpportunitiesPanel({ ws, refLabel, refTime, opps, target, bestThree, lowRateGps }: Props) {
+export function OpportunitiesPanel({ ws, refLabel, refTime, opps, target, bestThree, lowRateGps, onExplain }: Props) {
   const top = opps.slice(0, 6);
   return (
     <section className="card opps">
@@ -57,6 +59,18 @@ export function OpportunitiesPanel({ ws, refLabel, refTime, opps, target, bestTh
                     <small>Difference: {causeLabel(o.cause)}{vals ? ` (${vals})` : ''}</small>
                   </span>
                 </button>
+                {c && (
+                  <button
+                    type="button"
+                    className="cl-thumb-btn"
+                    onClick={() => { cursor.set({ s: c.sApex, time: null, src: 'opps' }); onExplain(o.corner, o.fromKey); }}
+                    title={`Compare the lines through corner ${o.corner}`}
+                  >
+                    <CornerLines ws={ws} corner={c} keys={[ws.refKey, o.fromKey]} variant="thumb"
+                      label={`Corner ${o.corner}: lap ${refLabel} and lap ${o.fromLabel}`} />
+                    <span>Compare lines</span>
+                  </button>
+                )}
               </li>
             );
           })}

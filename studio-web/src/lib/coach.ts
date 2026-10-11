@@ -8,6 +8,8 @@ export interface CoachTip {
   corner: number;
   loss: number;
   text: string;
+  /** The quicker lap this tip compares against, when it isn't the reference. */
+  vsKey?: string;
 }
 
 export interface LapCornerStats {
@@ -76,6 +78,7 @@ export function coachReference(ref: LapCornerStats, others: LapCornerStats[], ma
     tips.push({
       corner: r.corner,
       loss: gain,
+      vsKey: best.lap.key,
       text: `Corner ${r.corner}: lap ${best.lap.label} was ${gain.toFixed(2)} s quicker${how}`,
     });
   }

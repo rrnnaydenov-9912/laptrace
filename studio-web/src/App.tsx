@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AICoachPanel } from './components/AICoachPanel';
 import { CoachPanel } from './components/CoachPanel';
-import { CornerExplainer } from './components/CornerExplainer';
+import { CornerExplainer, type ExplainRequest } from './components/CornerExplainer';
 import { DriveView } from './components/DriveView';
 import { GoalCard } from './components/GoalCard';
 import { OpportunitiesPanel } from './components/OpportunitiesPanel';
@@ -76,6 +76,11 @@ export default function App() {
   const [units, setUnits] = useState<SpeedUnit>(initialUnits);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [savedGoal, setSavedGoal] = useState<Goal | null>(null);
+  const [explain, setExplain] = useState<ExplainRequest | null>(null);
+  const onExplain = useCallback((corner: number, vsKey: string | null) => {
+    setExplain((p) => ({ corner, vsKey, n: (p?.n ?? 0) + 1 }));
+    requestAnimationFrame(() => document.getElementById('corner-explainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, []);
   const [summaries, setSummaries] = useState<SessionSummary[]>([]);
   const [userTracks, setUserTracks] = useState<TrackDef[]>([]);
   const [current, setCurrent] = useState<LoadedSession | null>(null);
@@ -547,6 +552,7 @@ export default function App() {
                   target={target}
                   bestThree={bestThree}
                   lowRateGps={current.a.lowRateGps}
+                  onExplain={onExplain}
                 />
               )}
               {ws && (
@@ -572,12 +578,15 @@ export default function App() {
                     focusLabel={focusLabel}
                     cons={cons}
                     lowRateGps={focusSessionLowRate}
+                    focusKey={focusLap.key}
+                    labels={labels}
+                    onExplain={onExplain}
                   />
                 </div>
               )}
               {ws && focusLap && (
                 <div className="grid-insights">
-                  <CornerExplainer ws={ws} focusKey={focusLap.key} focusLabel={focusLabel} />
+                  <CornerExplainer ws={ws} focusKey={focusLap.key} focusLabel={focusLabel} labels={labels} request={explain} />
                   {current.a.track && (
                     <GoalCard
                       trackName={current.a.track.name}

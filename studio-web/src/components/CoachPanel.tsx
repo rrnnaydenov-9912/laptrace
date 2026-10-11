@@ -4,6 +4,8 @@ import { cursor } from '../state/cursor';
 import { speedFactor, speedUnit } from '../lib/format';
 import type { CoachTip, Consistency } from '../lib/coach';
 import type { Workspace } from '../lib/workspace';
+import { fastestThrough } from '../lib/cornerLines';
+import { CornerLines } from './CornerLines';
 
 interface Props {
   ws: Workspace;
@@ -12,9 +14,12 @@ interface Props {
   focusLabel: string;
   cons: Consistency | null;
   lowRateGps: boolean;
+  focusKey: string;
+  labels: Map<string, string>;
+  onExplain: (corner: number, vsKey: string | null) => void;
 }
 
-export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps }: Props) {
+export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps, focusKey, labels, onExplain }: Props) {
   return (
     <section className="card coach">
       <header className="card-head"><h2>Coach</h2><span className="hint">Lap {focusLabel}{isRef ? ' · reference lap' : ' vs reference'}</span></header>
@@ -28,14 +33,55 @@ export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps }: Pr
         <ol className="tips">
           {tips.map((t) => {
             const c = ws.corners.find((x) => x.number === t.corner);
+            const vsKey = isRef ? t.vsKey ?? null : ws.refKey;
             return (
-              <li key={t.corner} onClick={() => c && cursor.set({ s: c.sApex, time: null, src: 'corner' })}>
-                <span className="tip-loss">{isRef ? '−' : '+'}{t.loss.toFixed(2)} s</span>
-                <span>{t.text}</span>
+              <li key={t.corner}>
+                <button type="button" className="tip-main" onClick={() => c && cursor.set({ s: c.sApex, time: null, src: 'corner' })}>
+                  <span className="tip-loss">{isRef ? '−' : '+'}{t.loss.toFixed(2)} s</span>
+                  <span>{t.text}</span>
+                </button>
+                {c && (
+                  <button
+                    type="button"
+                    className="cl-thumb-btn"
+                    onClick={() => { cursor.set({ s: c.sApex, time: null, src: 'corner' }); onExplain(t.corner, vsKey); }}
+                    title={`Compare the lines through corner ${t.corner}`}
+                  >
+                    <CornerLines ws={ws} corner={c} keys={[focusKey, vsKey]} variant="thumb"
+                      label={`Corner ${t.corner}: lap ${focusLabel}${vsKey ? ` and lap ${labels.get(vsKey) ?? vsKey}` : ''}`} />
+                    <span>Compare lines</span>
+                  </button>
+                )}
               </li>
             );
           })}
         </ol>
+      )}
+      {ws.aligned.size >= 2 && ws.corners.length > 0 && (
+        <div className="cl-strip">
+          <h3>Your lines, corner by corner</h3>
+          <p className="hint">Lap {focusLabel} against the quickest other lap through each corner. Open one to replay both.</p>
+          <ul>
+            {ws.corners.map((c) => {
+              const vsKey = fastestThrough(ws, c.number, focusKey) ?? (focusKey !== ws.refKey ? ws.refKey : null);
+              const vsLabel = vsKey ? labels.get(vsKey) ?? vsKey : '';
+              return (
+                <li key={c.number}>
+                  <button
+                    type="button"
+                    className="cl-thumb-btn"
+                    onClick={() => { cursor.set({ s: c.sApex, time: null, src: 'corner' }); onExplain(c.number, vsKey); }}
+                    title={`Compare the lines through turn ${c.number}`}
+                  >
+                    <CornerLines ws={ws} corner={c} keys={[focusKey, vsKey]} variant="thumb"
+                      label={`Turn ${c.number}: lap ${focusLabel}${vsKey ? ` and lap ${vsLabel}` : ''}`} />
+                    <span>T{c.number}{vsKey ? ` · vs lap ${vsLabel}` : ''}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       {cons && cons.lapCount >= 2 && (
         <div className="consistency">

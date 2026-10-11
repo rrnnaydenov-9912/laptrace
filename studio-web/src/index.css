@@ -313,10 +313,14 @@ table.data .theoretical td { font-style: italic; color: var(--muted); border-bot
 .corners td.clickable, .corners tr.clickable { cursor: pointer; }
 .tips { margin: 0; padding: 0; list-style: none; counter-reset: tip; display: flex; flex-direction: column; gap: 8px; }
 .tips li {
-  counter-increment: tip; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px;
-  padding: 8px 10px; border-radius: 8px; background: var(--panel-2); cursor: pointer; border: 1px solid transparent;
+  counter-increment: tip; display: flex; gap: 10px; align-items: center;
+  padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid transparent;
 }
 .tips li:hover { border-color: var(--border); }
+.tip-main {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start;
+  background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
 .tip-loss { font-weight: 800; color: var(--bad); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .consistency { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.85rem; }
 .consistency p { margin: 4px 0; }
@@ -394,22 +398,57 @@ table.data .theoretical td { font-style: italic; color: var(--muted); border-bot
 .opps-kpis dt, .opps-kpis .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .opps-kpis dd, .opps-kpis .v { margin: 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .opp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.opp-list li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); }
+.opp-list li { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); }
 .opp-corner { flex: none; min-width: 2.6em; text-align: center; padding: 2px 6px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; background: var(--accent-soft); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .opp-text { font-size: 0.88rem; line-height: 1.45; }
 
+/* ---------- corner lines ---------- */
+.cl { display: block; overflow: visible; }
+.cl-full { width: 100%; max-height: 320px; margin: 4px 0 8px; }
+.cl-thumb { width: 132px; height: 92px; }
+.cl-track { fill: none; stroke: var(--grid); stroke-linecap: round; stroke-linejoin: round; }
+.cl-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.cl-a { --cl: var(--accent); }
+.cl-b { --cl: var(--best); }
+.cl-line.cl-a, .cl-line.cl-b { stroke: var(--cl); }
+.cl-line.cl-b { stroke-dasharray: 6 4; }
+.cl-mk { fill: var(--cl); stroke: var(--panel); stroke-width: 1.5; }
+.cl-dot { fill: var(--cl); stroke: var(--panel); stroke-width: 2; }
+.cl-entry, .cl-note { font-size: 10px; fill: var(--muted); }
+.cl-entry { text-anchor: middle; font-weight: 600; }
+.cl-thumb-btn {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--muted);
+  font: inherit; font-size: 0.7rem; cursor: pointer;
+}
+.cl-thumb-btn:hover { border-color: var(--accent); color: var(--text); }
+.cl-thumb-btn:focus-visible, .tip-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ex-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; font-size: 0.85rem; }
+.ex-controls label { color: var(--muted); }
+.ex-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--muted); }
+.ex-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.ex-legend li.cl-a, .ex-legend li.cl-b { color: var(--text); font-weight: 600; }
+.ex-legend .sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; background: var(--cl); }
+.ex-legend .cl-b .sw { background: repeating-linear-gradient(90deg, var(--cl) 0 6px, transparent 6px 9px); }
+.ex-legend .sh { display: inline-block; width: 9px; height: 9px; background: var(--muted); }
+.ex-legend .sh-brake { border-radius: 50%; }
+.ex-legend .sh-slow { transform: rotate(45deg) scale(0.85); }
+.ex-legend .sh-throttle { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.ex-verdict { margin: 4px 0 10px; font-size: 0.92rem; line-height: 1.5; max-width: 65ch; }
+.ex-table-wrap { overflow-x: auto; }
+.ex-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.ex-table th, .ex-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.ex-table thead th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.ex-table thead th.cl-a, .ex-table thead th.cl-b { color: var(--cl); }
+.ex-table tbody th { font-weight: 500; color: var(--muted); }
+.ex-table td.win { font-weight: 700; color: var(--good); }
+.cl-strip { margin-top: 12px; }
+.cl-strip h3 { margin: 0 0 2px; }
+.cl-strip ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 480px) { .cl-thumb { width: 104px; height: 72px; } }
+
 /* ---------- explainer + goal row ---------- */
 .grid-insights { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
-.explainer-svg { display: block; width: 100%; max-height: 300px; margin: 4px 0 8px; }
-.ex-track { fill: none; stroke: var(--grid); stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
-.ex-line { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 4 4; }
-.ex-dot { fill: var(--text); stroke: var(--panel); stroke-width: 2; }
-.explainer-svg g circle { stroke: var(--panel); stroke-width: 2; }
-.explainer-svg g text { font-size: 11px; font-weight: 600; fill: var(--text); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
-.mk-brake circle { fill: var(--bad); }
-.mk-turn circle { fill: var(--warn); }
-.mk-apex circle { fill: var(--accent); }
-.mk-throttle circle { fill: var(--good); }
 .ex-figs, .goal-figs, .drive-stats dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; margin: 0; }
 .ex-figs div, .goal-figs div, .drive-stats dl div { display: flex; flex-direction: column; gap: 2px; }
 .ex-figs dt, .goal-figs dt, .drive-stats dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
