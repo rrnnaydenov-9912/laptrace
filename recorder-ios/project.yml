@@ -28,6 +28,7 @@ targets:
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Laptrace records your GPS track to time laps and analyse your driving."
         INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "Laptrace keeps recording while the screen is locked, and with Auto-record drives on, starts recording a drive by itself when you begin driving."
         INFOPLIST_KEY_NSMotionUsageDescription: "Laptrace records acceleration to measure braking and cornering g-forces."
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Laptrace connects to your OBD reader to record RPM, throttle and other car data."
         INFOPLIST_KEY_UIFileSharingEnabled: YES
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: ""

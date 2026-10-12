@@ -26,6 +26,8 @@ struct LaptraceApp: App {
                     .tabItem { Label("Sessions", systemImage: "list.bullet.rectangle") }
                 TracksView()
                     .tabItem { Label("Tracks", systemImage: "flag.checkered") }
+                ProbeView()
+                    .tabItem { Label("Car", systemImage: "car.side") }
             }
             .environment(recorder)
             .environment(detection)
