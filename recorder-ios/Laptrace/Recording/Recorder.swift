@@ -260,7 +260,13 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             track = t
             timer.setTrack(t)
         }
-        guard state == .recording else { return }
+        let obd = OBDLive.shared
+        let livePedal = obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil
+        guard state == .recording else {
+            // Draw the line on the track screen before recording starts too; start() resets it.
+            if fix.hAcc > 0, fix.hAcc <= 30 { line.add(fix, pedal: livePedal) }
+            return
+        }
         if let w = gpsWriter, let data = fix.csvLine.data(using: .utf8) {
             w.append(data)
             fixCount += 1
@@ -270,8 +276,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             accumulateDrive(fix)
             return
         }
-        let obd = OBDLive.shared
-        line.add(fix, pedal: obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil)
+        line.add(fix, pedal: livePedal)
         for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
             switch e {
             case .lapStarted(let t):

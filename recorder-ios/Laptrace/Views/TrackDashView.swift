@@ -14,7 +14,7 @@ struct TrackDashView: View {
                     // Upper half: clock, line and the next-corner cue.
                     VStack(spacing: 8) {
                         topBar
-                        LineMap(line: rec.line)
+                        LineMap(line: rec.line, hint: mapHint)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
                         cueRow
@@ -47,6 +47,13 @@ struct TrackDashView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+
+    /// What the empty map says, so a dark panel is never a mystery.
+    private var mapHint: String {
+        guard let fix = rec.lastFix else { return "Waiting for GPS…\nAllow location access and keep the phone where it can see the sky." }
+        if fix.hAcc <= 0 || fix.hAcc > 30 { return String(format: "GPS accuracy is ±%.0f m.\nYour line appears once it is below 30 m.", fix.hAcc) }
+        return "Your line appears here once you're moving."
     }
 
     // MARK: Top: close, lap clock, reader, delta
@@ -184,13 +191,16 @@ struct TrackDashView: View {
 /// Map of the best lap (grey), the lap in progress coloured by pedal, corner numbers and the car.
 struct LineMap: View {
     let line: LiveLine
+    var hint = "Your line appears here once you're moving."
 
     var body: some View {
         Canvas { ctx, size in
             let pts = line.best + line.current
             guard pts.count > 1 else {
-                ctx.draw(Text("Your line appears here once you're moving.").foregroundStyle(.secondary),
-                         at: CGPoint(x: size.width / 2, y: size.height / 2))
+                let mid = CGPoint(x: size.width / 2, y: size.height / 2)
+                if !pts.isEmpty {
+                    ctx.fill(Path(ellipseIn: CGRect(x: mid.x - 7, y: mid.y - 7, width: 14, height: 14)), with: .color(.white))
+                }
                 return
             }
             let xs = pts.map(\.x), ys = pts.map(\.y)
@@ -216,6 +226,14 @@ struct LineMap: View {
             if let car = line.current.last {
                 let at = p(car.x, car.y)
                 ctx.fill(Path(ellipseIn: CGRect(x: at.x - 7, y: at.y - 7, width: 14, height: 14)), with: .color(.white))
+            }
+        }
+        .overlay {
+            if line.best.count + line.current.count <= 1 {
+                Text(hint)
+                    .font(.headline).multilineTextAlignment(.center)
+                    .foregroundStyle(Color.white.opacity(0.8))
+                    .padding(.horizontal, 20).offset(y: line.current.isEmpty ? 0 : 40)
             }
         }
         .overlay(alignment: .bottomLeading) {
