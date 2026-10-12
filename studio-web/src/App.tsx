@@ -18,8 +18,9 @@ import { TrackMap } from './components/TrackMap';
 import { analyzeSession, summarize } from './lib/analysis';
 import { coachLap, coachReference, consistency, type LapCornerStats } from './lib/coach';
 import { buildFacts } from './lib/aicoach';
-import { carLapStats, carSummary } from './lib/car';
+import { carLapStats, carSummary, stint as stintOf } from './lib/car';
 import { CarPanel } from './components/CarPanel';
+import { StintChart } from './components/StintChart';
 import { isDrive } from './lib/drive';
 import { fmtDate, LAP_PALETTE, setSpeedUnit, type SpeedUnit } from './lib/format';
 import { bestConsecutive, evaluateGoal, opportunities, outlierKeys, suggestGoal, targetTime, type Goal } from './lib/insights';
@@ -347,6 +348,7 @@ export default function App() {
     const laps = includedTimed.map((l) => carLapStats(l, lbl(l))).filter((x) => x != null);
     return carSummary(carLapStats(refLap, lbl(refLap)), laps);
   }, [refLap, includedTimed, labels]);
+  const stintData = useMemo(() => (car ? stintOf(car.laps) : null), [car]);
   const facts = useMemo(() => {
     if (!current || !cons || !refLap) return null;
     return buildFacts({
@@ -597,6 +599,7 @@ export default function App() {
                 <div className="grid-insights">
                   <CornerExplainer ws={ws} focusKey={focusLap.key} focusLabel={focusLabel} labels={labels} request={explain} />
                   {car && <CarPanel summary={car} refLabel={labels.get(car.ref.key) ?? car.ref.label} />}
+                  {stintData && <StintChart stint={stintData} />}
                   {current.a.track && (
                     <GoalCard
                       trackName={current.a.track.name}

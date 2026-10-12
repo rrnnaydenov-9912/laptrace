@@ -37,6 +37,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     private(set) var motionRate: Double = 0
     /// Current lap against the best lap, for the track screen.
     private(set) var line = LiveLine()
+    /// Acceleration timer; nil unless the acceleration screen is open.
+    var accel: AccelMeter?
     var now = Date()
 
     var best: CompletedLap? { laps.min(by: { $0.duration < $1.duration }) }
@@ -84,7 +86,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
 
     /// Leaves GPS running while recording or while drive detection is checking a possible drive.
     func stopPreviewIfIdle() {
-        if state == .idle && !keepGPSOn { location.stopUpdatingLocation() }
+        if state == .idle && !keepGPSOn && accel == nil { location.stopUpdatingLocation() }
     }
 
     @ObservationIgnored var keepGPSOn = false
@@ -249,6 +251,11 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
                              lat: loc.coordinate.latitude, lon: loc.coordinate.longitude,
                              alt: loc.altitude, hAcc: loc.horizontalAccuracy,
                              speed: loc.speed, course: loc.course)
+            if accel != nil, loc.speed >= 0 {
+                let obd = OBDLive.shared
+                accel?.add(AccelSample(t: fix.t, v: loc.speed, alt: loc.altitude, hAcc: loc.horizontalAccuracy,
+                                       vAcc: loc.verticalAccuracy, obdKmh: obd.isLive ? obd.values[0x0D] : nil))
+            }
             handle(fix)
         }
     }
@@ -277,11 +284,12 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             return
         }
         line.add(fix, pedal: livePedal)
+        if line.takeBrakeAlert() != nil { cue.brakeWarning() }
         for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
             switch e {
             case .lapStarted(let t):
                 currentLapStart = t
-                line.lapStarted()
+                line.lapStarted(at: t)
             case .lapCompleted(let lap):
                 cue.speak(duration: lap.duration, previousBest: best?.duration)
                 line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < (best?.duration ?? .infinity))
@@ -310,4 +318,5 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
 
 enum Haptics {
     static func lap() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    static func brake() { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
 }

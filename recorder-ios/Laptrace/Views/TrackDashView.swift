@@ -13,6 +13,7 @@ struct TrackDashView: View {
                 VStack(spacing: 8) {
                     // Upper half: clock, line and the next-corner cue.
                     VStack(spacing: 8) {
+                        DeltaBar(seconds: rec.line.now?.deltaSeconds)
                         topBar
                         LineMap(line: rec.line, hint: mapHint)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -65,11 +66,23 @@ struct TrackDashView: View {
                 .accessibilityLabel("Close track screen")
             VStack(alignment: .leading, spacing: 0) {
                 Text(Fmt.lap(rec.currentLapElapsed)).font(.title.bold()).monospacedDigit()
-                Text("best \(Fmt.lap(rec.best?.duration))").font(.caption).foregroundStyle(.secondary)
+                if let p = rec.line.now?.predicted {
+                    Text("predicted \(Fmt.lap(p))").font(.caption.bold()).foregroundStyle(.cyan)
+                } else {
+                    Text("best \(Fmt.lap(rec.best?.duration))").font(.caption).foregroundStyle(.secondary)
+                }
             }
             Spacer()
             readerButton
-            if let d = rec.line.now?.deltaKmh {
+            if let d = rec.line.now?.deltaSeconds {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(String(format: "%+.2f", d)).font(.title.bold()).monospacedDigit()
+                        .foregroundStyle(d <= 0 ? .green : .red)
+                    if let k = rec.line.now?.deltaKmh {
+                        Text(String(format: "%+.0f km/h vs best", k)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } else if let d = rec.line.now?.deltaKmh {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(String(format: "%+.0f", d)).font(.title.bold()).monospacedDigit()
                         .foregroundStyle(d >= 0 ? .green : .red)
@@ -220,8 +233,21 @@ struct LineMap: View {
                 seg.move(to: p(a.x, a.y)); seg.addLine(to: p(b.x, b.y))
                 ctx.stroke(seg, with: .color(Self.color(b.pedal)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
             }
+            for m in line.brakeMarkers {   // where the best lap started braking
+                let at = p(m.x, m.y)
+                var bar = Path()
+                bar.addRoundedRect(in: CGRect(x: at.x - 6, y: at.y - 2.5, width: 12, height: 5), cornerSize: CGSize(width: 2, height: 2))
+                ctx.fill(bar, with: .color(.red))
+                ctx.stroke(bar, with: .color(.white), lineWidth: 1)
+            }
             for c in line.corners {
                 ctx.draw(Text("T\(c.number)").font(.caption2.bold()).foregroundStyle(.white.opacity(0.8)), at: p(c.x, c.y))
+            }
+            if let g = line.ghost {   // the best lap at the same elapsed time
+                let at = p(g.x, g.y)
+                let r = CGRect(x: at.x - 6, y: at.y - 6, width: 12, height: 12)
+                ctx.fill(Path(ellipseIn: r), with: .color(.cyan.opacity(0.35)))
+                ctx.stroke(Path(ellipseIn: r), with: .color(.cyan), lineWidth: 2)
             }
             if let car = line.current.last {
                 let at = p(car.x, car.y)
@@ -238,7 +264,7 @@ struct LineMap: View {
         }
         .overlay(alignment: .bottomLeading) {
             HStack(spacing: 10) {
-                legend(.green, "throttle"); legend(.red, "brake"); legend(.yellow, "coast"); legend(.gray, "best")
+                legend(.green, "throttle"); legend(.red, "brake"); legend(.yellow, "coast"); legend(.gray, "best"); legend(.cyan, "ghost")
             }
             .font(.caption2).padding(8)
         }
@@ -251,5 +277,31 @@ struct LineMap: View {
 
     private func legend(_ c: Color, _ s: String) -> some View {
         HStack(spacing: 3) { Circle().fill(c).frame(width: 7, height: 7); Text(s).foregroundStyle(.secondary) }
+    }
+}
+
+
+/// Running time gap to the best lap: fills right in red when slower, left in green when faster. Full scale ±2 s.
+struct DeltaBar: View {
+    let seconds: Double?
+    static let fullScale = 2.0
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width / 2
+            let f = min(abs(seconds ?? 0) / Self.fullScale, 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.08))
+                if let s = seconds {
+                    Rectangle().fill(s <= 0 ? Color.green : Color.red)
+                        .frame(width: w * f)
+                        .offset(x: s <= 0 ? w - w * f : w)
+                }
+                Rectangle().fill(Color.white).frame(width: 2).offset(x: w - 1)
+            }
+            .clipShape(Capsule())
+        }
+        .frame(height: 10)
+        .accessibilityLabel(seconds.map { String(format: "%+.2f seconds against best lap", $0) } ?? "No delta yet")
     }
 }

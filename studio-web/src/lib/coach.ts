@@ -90,6 +90,26 @@ export interface Consistency {
   lapCount: number;
   worstCorner: { corner: number; sd: number } | null;
   perCornerSd: { corner: number; sd: number }[];
+  /** Spread of the braking point per corner, metres (σ over laps where it was found). */
+  brakeSd: { corner: number; sd: number }[];
+  /** Median of brakeSd, metres. */
+  brakeSdMedian: number | null;
+  worstBrakeCorner: { corner: number; sd: number } | null;
+  /** 0–100: lap-time σ (0 s → 100, 2 s → 0) weighted 60%, median brake-point σ (0 m → 100, 20 m → 0) weighted 40%. */
+  score: number | null;
+}
+
+/** Lap-time σ at which the lap part of the score reaches zero, seconds. */
+export const SCORE_LAP_SD = 2;
+/** Brake-point σ at which the braking part of the score reaches zero, metres. */
+export const SCORE_BRAKE_SD = 20;
+
+export function consistencyScore(lapTimeSd: number | null, brakeSdMedian: number | null): number | null {
+  if (lapTimeSd == null) return null;
+  const lap = 100 * (1 - Math.min(lapTimeSd / SCORE_LAP_SD, 1));
+  if (brakeSdMedian == null) return Math.round(lap);
+  const brake = 100 * (1 - Math.min(brakeSdMedian / SCORE_BRAKE_SD, 1));
+  return Math.round(0.6 * lap + 0.4 * brake);
 }
 
 export function consistency(laps: LapCornerStats[]): Consistency {
@@ -100,11 +120,23 @@ export function consistency(laps: LapCornerStats[]): Consistency {
     const v = laps.map((l) => l.stats[i]).filter((s) => s?.valid && Number.isFinite(s.minSpeed)).map((s) => s.minSpeed);
     if (v.length >= 2) perCornerSd.push({ corner: i + 1, sd: stdDev(v) });
   }
-  const worst = perCornerSd.reduce<{ corner: number; sd: number } | null>((a, b) => (!a || b.sd > a.sd ? b : a), null);
+  const brakeSd: { corner: number; sd: number }[] = [];
+  for (let i = 0; i < nCorners; i++) {
+    const v = laps.map((l) => l.stats[i]).filter((s) => s?.valid && Number.isFinite(s.brakeS)).map((s) => s.brakeS);
+    if (v.length >= 3) brakeSd.push({ corner: i + 1, sd: stdDev(v) });
+  }
+  const top = (xs: { corner: number; sd: number }[]) => xs.reduce<{ corner: number; sd: number } | null>((a, b) => (!a || b.sd > a.sd ? b : a), null);
+  const sorted = brakeSd.map((b) => b.sd).sort((a, b) => a - b);
+  const brakeSdMedian = sorted.length ? (sorted.length % 2 ? sorted[sorted.length >> 1] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : null;
+  const lapTimeSd = times.length >= 2 ? stdDev(times) : null;
   return {
-    lapTimeSd: times.length >= 2 ? stdDev(times) : null,
+    lapTimeSd,
     lapCount: times.length,
-    worstCorner: worst,
+    worstCorner: top(perCornerSd),
     perCornerSd,
+    brakeSd,
+    brakeSdMedian,
+    worstBrakeCorner: top(brakeSd),
+    score: consistencyScore(lapTimeSd, brakeSdMedian),
   };
 }

@@ -9,6 +9,7 @@ struct RecordView: View {
     @State private var videoMarked = false
     @State private var showSettings = false
     @State private var showDash = false
+    @State private var showAccel = false
     @AppStorage("checklistDone") private var checklistDone = false
 
     /// The running recording's mode, or the one picked for the next recording.
@@ -51,6 +52,7 @@ struct RecordView: View {
             .sheet(isPresented: $showTrackPicker) { TrackPicker() }
             .sheet(isPresented: $showSettings) { RecordSettings() }
             .fullScreenCover(isPresented: $showDash) { TrackDashView() }
+            .fullScreenCover(isPresented: $showAccel) { AccelView() }
             .sheet(item: Binding(get: { rec.lastStopped }, set: { rec.lastStopped = $0 })) { DebriefSheet(meta: $0) }
             .overlay { if !checklistDone && rec.state == .idle { checklist } }
             .onAppear { rec.startPreview() }
@@ -245,6 +247,12 @@ struct RecordView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.indigo)
+
+            Button { showAccel = true } label: {
+                Label("Acceleration timer", systemImage: "stopwatch")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
 
             Button {
                 sfMessage = rec.setStartFinishHere()

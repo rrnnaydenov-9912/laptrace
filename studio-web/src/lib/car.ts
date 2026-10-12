@@ -165,3 +165,29 @@ export function carSummary(ref: CarLapStats | null, laps: CarLapStats[]): CarSum
 
   return { ref, laps, sessionMaxRpm, advice };
 }
+
+export interface StintRow { key: string; label: string; time: number; oil: number | null; coolant: number | null }
+export interface Stint {
+  rows: StintRow[];
+  /** Seconds of lap time per 10 °C of oil (or coolant when there is no oil), from a least-squares fit. */
+  secPer10C: number | null;
+  tempChannel: 'oil' | 'coolant' | null;
+}
+
+/** Lap time against the hottest oil and coolant of each lap, in the order the laps were driven. */
+export function stint(laps: CarLapStats[]): Stint | null {
+  const rows = laps.filter((l) => fin(l.time)).map((l) => ({ key: l.key, label: l.label, time: l.time, oil: l.oilMax, coolant: l.coolantMax }));
+  if (rows.length < 2 || !rows.some((r) => r.oil != null || r.coolant != null)) return null;
+  const fit = (pick: (r: StintRow) => number | null) => {
+    const pts = rows.map((r) => [pick(r), r.time] as const).filter((p): p is readonly [number, number] => fin(p[0]));
+    if (pts.length < 4) return null;
+    const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length, my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const sxx = pts.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
+    if (Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])) < 5 || sxx === 0) return null;
+    return (pts.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) / sxx) * 10;
+  };
+  const oil = fit((r) => r.oil);
+  if (oil != null) return { rows, secPer10C: oil, tempChannel: 'oil' };
+  const coolant = fit((r) => r.coolant);
+  return { rows, secPer10C: coolant, tempChannel: coolant != null ? 'coolant' : null };
+}

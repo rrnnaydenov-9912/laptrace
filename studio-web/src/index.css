@@ -324,6 +324,9 @@ table.data .theoretical td { font-style: italic; color: var(--muted); border-bot
 .tip-loss { font-weight: 800; color: var(--bad); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .consistency { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.85rem; }
 .consistency p { margin: 4px 0; }
+.consistency h3 { display: flex; align-items: baseline; justify-content: space-between; }
+.cons-score { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cons-score small { font-size: 0.7rem; font-weight: 400; color: var(--muted, inherit); margin-left: 2px; }
 .coach .caveat { margin-top: 10px; }
 
 /* ---------- responsive ---------- */
@@ -496,3 +499,19 @@ table.data .theoretical td { font-style: italic; color: var(--muted); border-bot
 .car-stats dd { margin: 0; font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .car-advice { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .car-advice li.warn { color: var(--bad); font-weight: 600; }
+
+/* ---------- stint ---------- */
+.stint-chart { overflow-x: auto; }
+.stint-chart svg { width: 100%; min-width: 420px; height: auto; display: block; }
+.stint-chart .grid { stroke: var(--grid); }
+.stint-chart .ax { fill: var(--muted); font: 11px var(--mono); }
+.stint .s-time { stroke: var(--accent); stroke-width: 2.5; }
+.stint .s-time-dot { fill: var(--accent); }
+.stint .s-oil { stroke: var(--warn); stroke-width: 1.75; stroke-dasharray: 5 3; }
+.stint .s-coolant { stroke: var(--best); stroke-width: 1.75; stroke-dasharray: 2 3; }
+.stint-legend { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 12px; }
+.stint-legend i { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid; margin-right: 6px; vertical-align: middle; }
+.stint-legend i.s-time { border-color: var(--accent); }
+.stint-legend i.s-oil { border-color: var(--warn); border-top-style: dashed; }
+.stint-legend i.s-coolant { border-color: var(--best); border-top-style: dotted; }
+.stint-verdict { margin: 10px 0 0; }

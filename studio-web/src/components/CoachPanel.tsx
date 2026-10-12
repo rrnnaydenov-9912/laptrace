@@ -85,7 +85,7 @@ export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps, focu
       )}
       {cons && cons.lapCount >= 2 && (
         <div className="consistency">
-          <h3>Consistency</h3>
+          <h3>Consistency{cons.score != null && <span className="cons-score" title="Lap-time spread (60%) and brake-point spread (40%)">{cons.score}<small>/100</small></span>}</h3>
           <p>
             Lap times vary by <b>±{cons.lapTimeSd!.toFixed(2)} s</b> (σ over {cons.lapCount} timed laps).
             {cons.lapTimeSd! < 0.5 ? ' Very consistent.' : cons.lapTimeSd! < 1.2 ? ' Reasonably consistent.' : ' Large spread — focus on repeating your best lines.'}
@@ -93,6 +93,12 @@ export function CoachPanel({ ws, tips, isRef, focusLabel, cons, lowRateGps, focu
           {cons.worstCorner && (
             <p>
               Least consistent: <b>corner {cons.worstCorner.corner}</b>, min speed σ {(cons.worstCorner.sd * speedFactor()).toFixed(1)} {speedUnit()}.
+            </p>
+          )}
+          {cons.brakeSdMedian != null && cons.worstBrakeCorner && (
+            <p>
+              Brake points move by <b>±{cons.brakeSdMedian.toFixed(0)} m</b> on a typical corner; most at <b>corner {cons.worstBrakeCorner.corner}</b> (±{cons.worstBrakeCorner.sd.toFixed(0)} m).
+              {cons.worstBrakeCorner.sd > 10 ? ' Pick a fixed marker there and brake at it every lap.' : ''}
             </p>
           )}
         </div>

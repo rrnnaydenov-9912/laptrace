@@ -88,3 +88,24 @@ describe('car analysis', () => {
     expect(verifyNumbers(sum.advice.map((a) => a.text).join(' '), facts).ok).toBe(true);
   });
 });
+
+describe('stint view', () => {
+  const s = (i: number, time: number, oil: number | null, coolant: number | null = 90) =>
+    ({ key: String(i), label: String(i), time, oilMax: oil, coolantMax: coolant } as never);
+
+  it('fits lap time against oil temperature', async () => {
+    const { stint } = await import('../car');
+    const r = stint([s(1, 90, 100), s(2, 90.2, 105), s(3, 90.4, 110), s(4, 90.6, 115)]);
+    expect(r?.tempChannel).toBe('oil');
+    expect(r!.secPer10C!).toBeCloseTo(0.4, 5);
+    expect(r?.rows.map((x) => x.key)).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('falls back to coolant, and gives no verdict on a flat temperature', async () => {
+    const { stint } = await import('../car');
+    const r = stint([s(1, 90, null, 80), s(2, 90.1, null, 85), s(3, 90.2, null, 90), s(4, 90.3, null, 95)]);
+    expect(r?.tempChannel).toBe('coolant');
+    expect(stint([s(1, 90, 100), s(2, 91, 101), s(3, 92, 100), s(4, 93, 101)])?.secPer10C).toBeNull();
+    expect(stint([s(1, 90, null, null), s(2, 91, null, null)])).toBeNull();
+  });
+});

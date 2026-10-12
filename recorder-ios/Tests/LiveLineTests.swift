@@ -3,15 +3,17 @@ import XCTest
 
 final class LiveLineTests: XCTestCase {
     /// Drives the synthetic ring through the lap timer exactly like the recorder does.
-    private func run(_ synth: SyntheticSession, _ fixes: [GPSFix], pedal: Double? = nil) -> (LiveLine, [Double?]) {
+    private func run(_ synth: SyntheticSession, _ fixes: [GPSFix], pedal: Double? = nil,
+                     each: ((inout LiveLine, GPSFix) -> Void)? = nil) -> (LiveLine, [Double?]) {
         let timer = LapTimer()
         timer.setTrack(synth.track)
         var line = LiveLine(), best: Double = .infinity, deltas: [Double?] = []
         for f in fixes {
             line.add(f, pedal: pedal)
+            each?(&line, f)
             for e in timer.ingest(TimedPoint(t: f.t, p: f.latLon)) {
                 switch e {
-                case .lapStarted: line.lapStarted()
+                case .lapStarted(let t): line.lapStarted(at: t)
                 case .lapCompleted(let lap):
                     line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < best)
                     best = min(best, lap.duration)
@@ -32,6 +34,38 @@ final class LiveLineTests: XCTestCase {
         XCTAssertGreaterThan(late.count, 10, "position found on the best lap")
         // Identical laps: speed at the same spot matches within a few km/h (1 Hz GPS, 1 m grid).
         XCTAssertLessThan(late.map(abs).max() ?? 99, 6)
+    }
+
+    func testIdenticalLapsHaveZeroTimeDeltaAndPredictTheBest() {
+        var synth = SyntheticSession()
+        synth.laps = 4
+        var deltas: [Double] = [], predicted: [Double] = [], ghostGap: [Double] = []
+        let (line, _) = run(synth, synth.generate().fixes) { line, _ in
+            if let d = line.now?.deltaSeconds { deltas.append(d) }
+            if let p = line.now?.predicted { predicted.append(p) }
+            if let g = line.ghost, let c = line.current.last { ghostGap.append(hypot(g.x - c.x, g.y - c.y)) }
+        }
+        let best = try! XCTUnwrap(line.bestDuration)
+        XCTAssertGreaterThan(deltas.count, 50)
+        // Same speed profile every lap: the running gap stays within a few tenths (1 Hz fixes, 1 m grid).
+        XCTAssertLessThan(deltas.suffix(60).map(abs).max() ?? 99, 0.3)
+        XCTAssertLessThan(abs((predicted.last ?? 0) - best), 0.3)
+        // The ghost rides alongside the car.
+        XCTAssertGreaterThan(ghostGap.count, 50)
+        XCTAssertLessThan(ghostGap.suffix(60).max() ?? 99, 10)
+    }
+
+    func testBrakeWarningFiresOncePerCornerPerLap() {
+        var synth = SyntheticSession()
+        synth.laps = 4
+        var alerts: [Int] = []
+        let (line, _) = run(synth, synth.generate().fixes) { line, _ in
+            if let c = line.takeBrakeAlert() { alerts.append(c) }
+        }
+        guard !line.brakeMarkers.isEmpty else { return XCTAssertTrue(alerts.isEmpty) }
+        let perCorner = Dictionary(grouping: alerts, by: { $0 }).mapValues(\.count)
+        for m in line.brakeMarkers { XCTAssertLessThanOrEqual(perCorner[m.corner] ?? 0, 3, "at most once per lap") }
+        XCTAssertFalse(alerts.isEmpty, "warnings fire on laps after the best is set")
     }
 
     func testCurrentLapResetsAtTheLine() {

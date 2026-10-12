@@ -28,7 +28,11 @@ struct LiveLine {
         var s: Double            // metres into the best lap
         var bestKmh: Double      // best lap's speed at this spot
         var deltaKmh: Double     // now minus best
+        var deltaSeconds: Double? = nil   // elapsed this lap minus best lap's elapsed at the same spot (+ = slower)
+        var predicted: Double? = nil      // best lap time + running delta
     }
+
+    struct BrakeMarker: Equatable { var corner: Int; var s: Double; var x: Double; var y: Double }
 
     /// Longitudinal deceleration (g) beyond which we call it braking.
     static let brakeG = 0.15
@@ -42,8 +46,20 @@ struct LiveLine {
     private(set) var now: Now?
     private(set) var accelG: Double = 0
 
+    private(set) var bestDuration: Double?
+    /// Brake markers from the best lap, for the map.
+    private(set) var brakeMarkers: [BrakeMarker] = []
+
     private var bestGrid: Coach.Grid?
     private var lastS: Double?
+    private var lapStartT: Double?
+    private var bestStartT: Double?   // the best lap's own line-crossing time, on its grid's clock
+    private var lastT: Double?
+    private var warned: Set<Int> = []
+    private var pendingAlert: Int?
+
+    /// Metres before the best lap's brake point at which to warn the driver.
+    static let brakeLead = 50.0
 
     mutating func reset() { self = LiveLine() }
 
@@ -58,7 +74,32 @@ struct LiveLine {
         }
         current.append(Point(t: fix.t, x: p.x, y: p.y, v: fix.speed, pedal: Self.pedal(accelG: accelG, pedal: pedal)))
         if current.count > 6_000 { current.removeFirst(1_000) }   // out-lap safety net
-        now = locate(p, speed: fix.speed)
+        lastT = fix.t
+        let prevS = lastS
+        now = locate(p, speed: fix.speed, t: fix.t)
+        if let s = now?.s, let prevS, s >= prevS {
+            for m in brakeMarkers where !warned.contains(m.corner) {
+                let at = m.s - Self.brakeLead
+                if prevS < at && s >= at { warned.insert(m.corner); pendingAlert = m.corner }
+            }
+        }
+    }
+
+    /// The corner whose brake warning point we just passed, once per corner per lap.
+    mutating func takeBrakeAlert() -> Int? {
+        defer { pendingAlert = nil }
+        return pendingAlert
+    }
+
+    /// Where the best lap was at this point of the current lap, for the ghost dot on the map.
+    var ghost: Vec2? {
+        guard let g = bestGrid, let t0 = lapStartT, let t = lastT, let b0 = bestStartT,
+              let first = g.t.first, let end = g.t.last else { return nil }
+        let e = t - t0 + b0
+        guard e >= first, e <= end else { return nil }
+        let i = min(max(lowerBound(g.t, e), 1), g.t.count - 1)
+        let f = min(max((e - g.t[i - 1]) / max(g.t[i] - g.t[i - 1], 1e-9), 0), 1)
+        return Vec2(x: g.x[i - 1] + (g.x[i] - g.x[i - 1]) * f, y: g.y[i - 1] + (g.y[i] - g.y[i - 1]) * f)
     }
 
     static func pedal(accelG: Double, pedal: Double?) -> Pedal {
@@ -68,9 +109,13 @@ struct LiveLine {
         return .coast
     }
 
-    mutating func lapStarted() {
+    /// `at` is the interpolated line-crossing time from the lap timer, when known.
+    mutating func lapStarted(at t: Double? = nil) {
         current = current.suffix(1)
-        lastS = nil
+        lapStartT = t ?? current.last?.t
+        lastS = bestGrid == nil ? nil : 0   // just crossed the line: search the start of the lap first
+        warned = []
+        pendingAlert = nil
     }
 
     /// Call when a lap finishes, before `lapStarted` for the next one.
@@ -80,7 +125,10 @@ struct LiveLine {
                             y: current.map(\.y), speed: current.map(\.v))
         if isBest || bestGrid == nil {
             best = current
-            setBest(Coach.resample(lap))
+            bestDuration = duration
+            let g = Coach.resample(lap)
+            bestStartT = min(lapStartT ?? g.t.first ?? 0, g.t.first ?? 0)
+            setBest(g)
         } else if let ref = bestGrid, let length = ref.s.last {
             let g = Coach.aligned(Coach.resample(lap), to: length)
             let zones = Coach.cornerZones(corners.map { Coach.Corner(start: $0.start, end: $0.end, angle: 0) }, length: length)
@@ -100,11 +148,16 @@ struct LiveLine {
             let k = min(max(lowerBound(g.s, m.minAt), 0), g.s.count - 1)
             return CornerRef(number: i + 1, start: c.start, end: c.end, x: g.x[k], y: g.y[k], best: m, last: nil)
         }
+        brakeMarkers = corners.compactMap { c in
+            guard let b = c.best.brake else { return nil }
+            let k = min(max(lowerBound(g.s, b), 0), g.s.count - 1)
+            return BrakeMarker(corner: c.number, s: b, x: g.x[k], y: g.y[k])
+        }
     }
 
     /// Where we are on the best lap. Searches near the last match so close-together sections of
     /// track (a hairpin's two legs) don't get confused.
-    private mutating func locate(_ p: Vec2, speed: Double) -> Now? {
+    private mutating func locate(_ p: Vec2, speed: Double, t: Double) -> Now? {
         guard let g = bestGrid, !g.s.isEmpty else { return nil }
         var lo = 0, hi = g.s.count - 1
         if let s = lastS {
@@ -117,7 +170,14 @@ struct LiveLine {
         }
         guard d < 40 else { lastS = nil; return nil }   // off the reference line (pit lane, spin)
         lastS = g.s[k]
-        return Now(s: g.s[k], bestKmh: g.v[k] * 3.6, deltaKmh: (speed - g.v[k]) * 3.6)
+        var now = Now(s: g.s[k], bestKmh: g.v[k] * 3.6, deltaKmh: (speed - g.v[k]) * 3.6)
+        // Past the end of the best lap's grid means we just crossed the line and the lap hasn't reset yet.
+        if let t0 = lapStartT, let b0 = bestStartT, t >= t0, k < g.s.count - 1 {
+            let delta = (t - t0) - (g.t[k] - b0)
+            now.deltaSeconds = delta
+            if let bestDuration { now.predicted = bestDuration + delta }
+        }
+        return now
     }
 
     /// The corner ahead (or the one we're in) and how far away its turn-in is.
