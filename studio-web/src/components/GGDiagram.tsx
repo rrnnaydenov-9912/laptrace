@@ -39,6 +39,7 @@ export function GGDiagram({ lap, ws, theme }: Props) {
       if (gl && gt) for (let i = 0; i < gl.length; i++) maxG = Math.max(maxG, Math.abs(gl[i]), Math.abs(gt[i]));
       maxG = Math.min(3, Math.ceil(maxG * 2) / 2 + 0.25);
       const W = cv.width;
+      if (!W) return;   // hidden or not laid out yet
       const c = W / 2;
       const r = (W / 2) * 0.92;
       const px = (g: number) => (g / maxG) * r;

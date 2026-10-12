@@ -215,7 +215,7 @@ enum Coach {
         }
     }
 
-    struct Measure { var entry: Double; var min: Double; var minAt: Double; var exit: Double; var brake: Double?; var time: Double }
+    struct Measure: Equatable { var entry: Double; var min: Double; var minAt: Double; var exit: Double; var brake: Double?; var time: Double }
 
     static func measure(_ g: Grid, corner c: Corner, zone: (Double, Double)) -> Measure {
         let lo = index(g, at: c.start - 20), hi = index(g, at: c.end + 10)

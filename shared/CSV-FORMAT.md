@@ -17,7 +17,7 @@ Time,Lap,Latitude,Longitude,Altitude (m),Speed (km/h),Heading (deg),Longitudinal
 ## Layout
 - **Metadata**: `Key,Value` rows first, then one blank line, then the header row. Rows starting with `#` are comments.
   - `Mode`: `Drive` for a road drive (no laps or track; Studio shows the drive view), `Track` otherwise. Missing in older files; readers then treat a recording with no track and no laps as a drive.
-  - Optional keys, written only when filled in: `Driver`, `Vehicle`, `Notes`, `Video Start UTC` (ISO 8601, the moment "Mark video start" was tapped; use it to sync onboard video).
+  - Optional keys, written only when filled in: `OBD Source` (the reader, when car data was recorded), `Driver`, `Vehicle`, `Notes`, `Video Start UTC` (ISO 8601, the moment "Mark video start" was tapped; use it to sync onboard video).
   - These free-text values are always wrapped in double quotes, with inner quotes doubled (`"Ana ""Ace"" P."`), so commas are safe. Line breaks are folded into single spaces, so every metadata row stays on one line.
 - **Delimiter**: comma. Studio also accepts `;`, tab and `|`.
 
@@ -35,6 +35,19 @@ Time,Lap,Latitude,Longitude,Altitude (m),Speed (km/h),Heading (deg),Longitudinal
 | `Vertical (g)` | no | Omitted when the phone's mount couldn't be calibrated. |
 | `GPS Accuracy (m)` | no | Horizontal accuracy of the source fix. |
 | `GPS Fix` | no | `1` = row at a real GPS fix, `0` = interpolated row. |
+| `RPM` | no | Engine speed from the OBD reader. |
+| `Throttle (%)` | no | Throttle plate position (OBD PID 11), 0–100. |
+| `Pedal (%)` | no | Accelerator pedal position (OBD PID 49), 0–100. Closer to what the driver's foot does than `Throttle`. |
+| `Engine Load (%)` | no | Calculated engine load (OBD PID 04). |
+| `OBD Speed (km/h)` | no | Speed reported by the car (OBD PID 0D). |
+| `Coolant (°C)` | no | Coolant temperature (OBD PID 05). |
+| `Oil (°C)` | no | Oil temperature (OBD PID 5C). Many cars don't report it. |
+| `Intake (°C)` | no | Intake air temperature (OBD PID 0F). |
+
+### Car data (OBD)
+The car columns appear only when an OBD reader was connected while recording, and each one only when the car answered that reading. A blank cell means no reading near that moment (the reader was polled at about 5–10 Hz for RPM, throttle and pedal, every few seconds for temperatures). The `OBD Source` metadata row names the reader.
+
+Standard OBD has no brake pressure. Braking is read from `Longitudinal (g)`: below about −0.15 g with the pedal under 5 % counts as braking; pedal under 5 % with no real deceleration counts as coasting.
 
 ## Logger export pipeline
 1. Drop fixes with accuracy worse than 30 m and impossible jumps.

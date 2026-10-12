@@ -40,7 +40,21 @@ export interface Channels {
   fix: Uint8Array | null;
   /** Raw lap label per row, or null when the file has no Lap column. */
   lap: string[] | null;
+  /** Car channels from OBD; NaN where the reader gave no value. */
+  rpm?: Float32Array | null;
+  throttle?: Float32Array | null;
+  pedal?: Float32Array | null;
+  load?: Float32Array | null;
+  obdSpeed?: Float32Array | null;
+  coolant?: Float32Array | null;
+  oil?: Float32Array | null;
+  intake?: Float32Array | null;
 }
+
+/** OBD channel keys shared by Channels, LapData and the aligned laps. */
+export const CAR_CHANNELS = ['rpm', 'throttle', 'pedal', 'load', 'obdSpeed', 'coolant', 'oil', 'intake'] as const;
+export type CarChannel = typeof CAR_CHANNELS[number];
+export type CarChannels = Partial<Record<CarChannel, Float32Array | null>>;
 
 export interface ColumnMapping {
   header: string;
@@ -138,6 +152,8 @@ export interface LapData {
   gLat: Float32Array | null;
   /** Cumulative distance in metres. */
   dist: Float64Array;
+  /** OBD car channels when the session recorded them (rpm, pedal, temperatures…). */
+  car?: CarChannels;
   length: number;
   maxSpeed: number;
   minSpeed: number;

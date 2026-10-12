@@ -18,6 +18,8 @@ import { TrackMap } from './components/TrackMap';
 import { analyzeSession, summarize } from './lib/analysis';
 import { coachLap, coachReference, consistency, type LapCornerStats } from './lib/coach';
 import { buildFacts } from './lib/aicoach';
+import { carLapStats, carSummary } from './lib/car';
+import { CarPanel } from './components/CarPanel';
 import { isDrive } from './lib/drive';
 import { fmtDate, LAP_PALETTE, setSpeedUnit, type SpeedUnit } from './lib/format';
 import { bestConsecutive, evaluateGoal, opportunities, outlierKeys, suggestGoal, targetTime, type Goal } from './lib/insights';
@@ -339,6 +341,12 @@ export default function App() {
       trackId: current.a.track.id, trackName: current.a.track.name, sessionId: current.rec.id,
     });
   }, [ws, opps, cons, includedTimed, current]);
+  const car = useMemo(() => {
+    if (!refLap?.car) return null;
+    const lbl = (l: LapData) => labels.get(l.key) ?? l.label;
+    const laps = includedTimed.map((l) => carLapStats(l, lbl(l))).filter((x) => x != null);
+    return carSummary(carLapStats(refLap, lbl(refLap)), laps);
+  }, [refLap, includedTimed, labels]);
   const facts = useMemo(() => {
     if (!current || !cons || !refLap) return null;
     return buildFacts({
@@ -350,10 +358,11 @@ export default function App() {
       target, bestThree, opps, cons,
       goal: savedGoal, goalProgress, nextGoal,
       lowRateGps: current.a.lowRateGps,
+      car,
     });
     // units: facts carry speeds in the display unit
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, cons, refLap, labels, target, bestThree, opps, savedGoal, goalProgress, nextGoal, excluded, units]);
+  }, [current, cons, refLap, labels, target, bestThree, opps, savedGoal, goalProgress, nextGoal, excluded, units, car]);
 
   const tips = useMemo(() => {
     if (!ws || !focusLap || !refLap) return [];
@@ -587,6 +596,7 @@ export default function App() {
               {ws && focusLap && (
                 <div className="grid-insights">
                   <CornerExplainer ws={ws} focusKey={focusLap.key} focusLabel={focusLabel} labels={labels} request={explain} />
+                  {car && <CarPanel summary={car} refLabel={labels.get(car.ref.key) ?? car.ref.label} />}
                   {current.a.track && (
                     <GoalCard
                       trackName={current.a.track.name}

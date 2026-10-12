@@ -35,6 +35,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     private(set) var lastSplit: (label: String, delta: Double?)?
     private(set) var motionAvailable = CMMotionManager().isDeviceMotionAvailable
     private(set) var motionRate: Double = 0
+    /// Current lap against the best lap, for the track screen.
+    private(set) var line = LiveLine()
     var now = Date()
 
     var best: CompletedLap? { laps.min(by: { $0.duration < $1.duration }) }
@@ -50,6 +52,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     @ObservationIgnored private let cue = LapCue()
     private var gpsWriter: AppendWriter?
     private var motionWriter: AppendWriter?
+    private var obdWriter: AppendWriter?
+    private var obdCount = 0
     @ObservationIgnored private var fixCount = 0
     @ObservationIgnored private var motionCount = 0
     @ObservationIgnored private var motionCountAtTick = 0
@@ -135,8 +139,11 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         session = meta
         gpsWriter = try? AppendWriter(url: SessionStore.shared.gpsURL(meta.id), flushThreshold: 4_096)
         motionWriter = try? AppendWriter(url: SessionStore.shared.motionURL(meta.id))
+        obdWriter = try? AppendWriter(url: SessionStore.shared.obdURL(meta.id), flushThreshold: 4_096)
+        obdCount = 0
         fixCount = 0; motionCount = 0; motionCountAtTick = 0
         laps = []; currentLapStart = nil; lastSplit = nil
+        line.reset()
         timer.reset()
         timer.setTrack(drive ? nil : track)
 
@@ -160,12 +167,14 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         motionQueue.waitUntilAllOperationsAreFinished()
         gpsWriter?.close(); motionWriter?.close()
         gpsWriter = nil; motionWriter = nil
+        obdWriter?.close(); obdWriter = nil
         keepGPSOn = false
         location.allowsBackgroundLocationUpdates = false
         UIApplication.shared.isIdleTimerDisabled = false
         meta.ended = Date()
         meta.fixCount = fixCount
         meta.motionCount = motionCount
+        if obdCount > 0 { meta.obdCount = obdCount; meta.obdReader = OBDLive.shared.readerName }
         session = nil
         state = .idle
         motionRate = 0
@@ -189,6 +198,14 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         return meta
     }
 
+    /// Car data from the OBD reader, written alongside GPS while recording. Called on the main queue.
+    func record(_ sample: OBDSample) {
+        guard state == .recording, let w = obdWriter, !sample.isEmpty,
+              let data = sample.csvLine.data(using: .utf8) else { return }
+        w.append(data)
+        obdCount += 1
+    }
+
     /// Remember the moment a camera started, so video can be lined up with the data later.
     func markVideoStart() {
         guard state == .recording, var s = session else { return }
@@ -203,6 +220,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         motionRate = motionRate * 0.8 + Double(n - motionCountAtTick) * 10 * 0.2
         motionCountAtTick = n
         gpsWriter?.flush()
+        obdWriter?.flush()
     }
 
     private func startMotion() {
@@ -252,12 +270,16 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             accumulateDrive(fix)
             return
         }
+        let obd = OBDLive.shared
+        line.add(fix, pedal: obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil)
         for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
             switch e {
             case .lapStarted(let t):
                 currentLapStart = t
+                line.lapStarted()
             case .lapCompleted(let lap):
                 cue.speak(duration: lap.duration, previousBest: best?.duration)
+                line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < (best?.duration ?? .infinity))
                 laps.append(lap)
                 let delta = best.map { lap.duration - $0.duration }
                 lastSplit = ("Lap \(lap.number)", lap.number == best?.number ? nil : delta)

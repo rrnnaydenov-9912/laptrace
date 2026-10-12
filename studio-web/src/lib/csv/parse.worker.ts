@@ -22,7 +22,8 @@ self.onmessage = async (e: MessageEvent<{ id: number; file: File }>) => {
   const transfer: Transferable[] = [];
   if (result.ok) {
     const c = result.session.channels;
-    for (const a of [c.t, c.lat, c.lon, c.speed, c.alt, c.heading, c.gLong, c.gLat, c.gVert, c.accuracy, c.fix]) {
+    for (const a of [c.t, c.lat, c.lon, c.speed, c.alt, c.heading, c.gLong, c.gLat, c.gVert, c.accuracy, c.fix,
+      c.rpm, c.throttle, c.pedal, c.load, c.obdSpeed, c.coolant, c.oil, c.intake]) {
       if (a) transfer.push(a.buffer as ArrayBuffer);
     }
   }

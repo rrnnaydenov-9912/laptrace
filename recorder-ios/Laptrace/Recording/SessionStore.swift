@@ -20,6 +20,9 @@ struct SessionMeta: Codable, Identifiable, Hashable {
     /// Road drives only: metres travelled and top speed in km/h.
     var distance: Double?
     var topSpeed: Double?
+    /// Name of the OBD reader that was connected while recording, if any.
+    var obdReader: String?
+    var obdCount: Int?
 
     var isDrive: Bool { mode == "drive" }
     var duration: Double { (ended ?? Date()).timeIntervalSince(started) }
@@ -38,7 +41,8 @@ struct SessionMeta: Codable, Identifiable, Hashable {
 }
 
 /// Sessions live in Documents/Sessions/<id>/ (visible in the Files app):
-/// meta.json, gps.csv (raw fixes), motion.bin (raw IMU), and the exported CSV.
+/// meta.json, gps.csv (raw fixes), motion.bin (raw IMU), obd.csv (car data, when a reader was
+/// connected), and the exported CSV.
 @Observable
 final class SessionStore {
     static let shared = SessionStore()
@@ -56,6 +60,7 @@ final class SessionStore {
     func folder(_ id: String) -> URL { root.appendingPathComponent(id, isDirectory: true) }
     func gpsURL(_ id: String) -> URL { folder(id).appendingPathComponent("gps.csv") }
     func motionURL(_ id: String) -> URL { folder(id).appendingPathComponent("motion.bin") }
+    func obdURL(_ id: String) -> URL { folder(id).appendingPathComponent("obd.csv") }
     private func metaURL(_ id: String) -> URL { folder(id).appendingPathComponent("meta.json") }
 
     func reload() {
@@ -95,10 +100,12 @@ final class SessionStore {
     func exportCSV(_ meta: SessionMeta, track: Track?) throws -> (url: URL, summary: Exporter.Summary) {
         let fixes = RawFiles.readFixes(gpsURL(meta.id))
         let motion = RawFiles.readMotion(motionURL(meta.id))
+        let obd = RawFiles.readOBD(obdURL(meta.id))
         var exporter = Exporter()
         exporter.options.device = deviceName()
         exporter.options.extraMeta = meta.csvMeta
-        guard let result = exporter.export(fixes: fixes, motion: motion, track: track) else {
+        if !obd.isEmpty { exporter.options.obdSource = meta.obdReader ?? "ELM327 OBD reader" }
+        guard let result = exporter.export(fixes: fixes, motion: motion, track: track, obd: obd) else {
             throw ExportError.notEnoughData
         }
         let safeTrack = (meta.isDrive ? "Drive" : meta.trackName ?? "session").replacingOccurrences(of: "[^A-Za-z0-9]+", with: "-", options: .regularExpression)

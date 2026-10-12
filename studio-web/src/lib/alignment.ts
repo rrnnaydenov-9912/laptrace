@@ -3,7 +3,8 @@
 // lap's own (drifting) odometer.
 
 import { makeProjector, type Projector } from './geo';
-import type { LapData } from './types';
+import { CAR_CHANNELS } from './types';
+import type { CarChannels, LapData } from './types';
 
 export interface ResampledLap {
   key: string;
@@ -13,6 +14,7 @@ export interface ResampledLap {
   speed: Float32Array;
   gLong: Float32Array | null;
   gLat: Float32Array | null;
+  car: CarChannels;
   lat: Float64Array;
   lon: Float64Array;
   x: Float64Array;
@@ -27,6 +29,8 @@ export interface AlignedLap {
   speed: Float32Array;
   gLong: Float32Array | null;
   gLat: Float32Array | null;
+  /** OBD channels (rpm, pedal, temperatures…) on the reference grid; empty when not recorded. */
+  car: CarChannels;
   lat: Float64Array;
   lon: Float64Array;
   /** Time delta vs the reference at each grid point, seconds (positive = slower). */
@@ -48,6 +52,8 @@ export function resampleLap(lap: LapData, proj: Projector, step = 1): ResampledL
   const speed = new Float32Array(m);
   const gLong = lap.gLong ? new Float32Array(m) : null;
   const gLat = lap.gLat ? new Float32Array(m) : null;
+  const car: CarChannels = {};
+  for (const c of CAR_CHANNELS) if (lap.car?.[c]) car[c] = new Float32Array(m);
   const lat = new Float64Array(m);
   const lon = new Float64Array(m);
   const x = new Float64Array(m);
@@ -65,12 +71,21 @@ export function resampleLap(lap: LapData, proj: Projector, step = 1): ResampledL
     speed[i] = lerp(lap.speed);
     if (gLong) gLong[i] = lerp(lap.gLong!);
     if (gLat) gLat[i] = lerp(lap.gLat!);
+    for (const c of CAR_CHANNELS) { const out = car[c]; if (out) out[i] = lerpSparse(lap.car![c]!, j, f); }
     lat[i] = lerp(lap.lat);
     lon[i] = lerp(lap.lon);
     x[i] = proj.x(lat[i], lon[i]);
     y[i] = proj.y(lat[i]);
   }
-  return { key: lap.key, s, t, speed, gLong, gLat, lat, lon, x, y, length: len };
+  return { key: lap.key, s, t, speed, gLong, gLat, car, lat, lon, x, y, length: len };
+}
+
+/** Interpolate between a[j] and a[j+1]; if one side has no reading, use the other. */
+function lerpSparse(a: ArrayLike<number>, j: number, f: number): number {
+  const x = a[j], y = a[j + 1];
+  if (Number.isFinite(x) && Number.isFinite(y)) return x + (y - x) * f;
+  if (Number.isFinite(x)) return x;
+  return Number.isFinite(y) ? y : NaN;
 }
 
 function projectOnSegment(
@@ -126,6 +141,8 @@ export function alignToReference(lap: ResampledLap, ref: ResampledLap): AlignedL
   const speed = new Float32Array(m).fill(NaN);
   const gLong = lap.gLong ? new Float32Array(m).fill(NaN) : null;
   const gLat = lap.gLat ? new Float32Array(m).fill(NaN) : null;
+  const car: CarChannels = {};
+  for (const c of CAR_CHANNELS) if (lap.car[c]) car[c] = new Float32Array(m).fill(NaN);
   const lat = new Float64Array(m).fill(NaN);
   const lon = new Float64Array(m).fill(NaN);
   const delta = new Float64Array(m).fill(NaN);
@@ -136,11 +153,12 @@ export function alignToReference(lap: ResampledLap, ref: ResampledLap): AlignedL
     speed.set(ref.speed);
     if (gLong && ref.gLong) gLong.set(ref.gLong);
     if (gLat && ref.gLat) gLat.set(ref.gLat);
+    for (const c of CAR_CHANNELS) { const out = car[c]; if (out && ref.car[c]) out.set(ref.car[c]!); }
     lat.set(ref.lat);
     lon.set(ref.lon);
     delta.fill(0);
     offset.fill(0);
-    return { key: lap.key, t, speed, gLong, gLat, lat, lon, delta, offset };
+    return { key: lap.key, t, speed, gLong, gLat, car, lat, lon, delta, offset };
   }
 
   const { sRef, offset: off } = projectToReference(lap, ref);
@@ -160,12 +178,13 @@ export function alignToReference(lap: ResampledLap, ref: ResampledLap): AlignedL
     speed[g] = lerp(lap.speed);
     if (gLong) gLong[g] = lerp(lap.gLong!);
     if (gLat) gLat[g] = lerp(lap.gLat!);
+    for (const c of CAR_CHANNELS) { const out = car[c]; if (out) out[g] = lerpSparse(lap.car[c]!, a, f); }
     lat[g] = lerp(lap.lat);
     lon[g] = lerp(lap.lon);
     offset[g] = lerp(off);
     delta[g] = t[g] - ref.t[g];
   }
-  return { key: lap.key, t, speed, gLong, gLat, lat, lon, delta, offset };
+  return { key: lap.key, t, speed, gLong, gLat, car, lat, lon, delta, offset };
 }
 
 /** Value of a grid channel at distance s (linear). */

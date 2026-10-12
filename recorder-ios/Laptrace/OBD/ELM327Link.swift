@@ -39,6 +39,9 @@ final class ELM327Link: NSObject {
         }
     }
 
+    /// One reader connection for the whole app: the Car tab's probe and the live track feed share it.
+    static let shared = ELM327Link()
+
     private(set) var state: State = .idle
     private(set) var found: [Found] = []
     private(set) var deviceName: String?

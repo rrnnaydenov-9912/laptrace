@@ -29,7 +29,7 @@ final class OBDProbe {
     /// PIDs the lap coach would use, in the order they matter.
     static let wishlist: [UInt8] = [0x0C, 0x0D, 0x11, 0x49, 0x04, 0x0B, 0x05, 0x0F, 0x5C]
 
-    let link = ELM327Link()
+    let link = ELM327Link.shared
     private(set) var steps: [Step] = []
     private(set) var running = false
     private(set) var listening: (phase: ListenPhase, secondsLeft: Int, frames: Int)?
@@ -44,6 +44,7 @@ final class OBDProbe {
 
     func run() async {
         guard !running else { return }
+        await OBDLive.shared.stop() // the probe needs the reader to itself
         running = true
         steps = []
         findings = []

@@ -488,3 +488,11 @@ table.data .theoretical td { font-style: italic; color: var(--muted); border-bot
 @media (max-width: 1100px) {
   .grid-insights { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Car panel (OBD) */
+.car-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px 16px; margin: 0 0 12px; }
+.car-stats div { display: flex; flex-direction: column; gap: 2px; }
+.car-stats dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.car-stats dd { margin: 0; font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.car-advice { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.car-advice li.warn { color: var(--bad); font-weight: 600; }

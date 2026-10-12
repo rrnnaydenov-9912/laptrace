@@ -5,10 +5,21 @@ import { bearing, haversine, median } from './geo';
 import { findCrossings, valueAt } from './gates';
 import { lapsFromCrossings, lapsFromLabels, singleRun } from './laps';
 import { detectTrack, perpendicularGate, splitGates, startFinishGate } from './tracks';
+import { CAR_CHANNELS } from './types';
 import type {
-  Channels, Gate, LapData, LapRange, LapSource, SectorSource, SessionAnalysis, SessionRecord,
+  CarChannels, Channels, Gate, LapData, LapRange, LapSource, SectorSource, SessionAnalysis, SessionRecord,
   SessionSummary, TrackDef,
 } from './types';
+
+/** Car channels are sparse (blank cells between polls): fall back to the nearer real reading. */
+function carAt(a: Float32Array, p: number): number {
+  const v = valueAt(a, p);
+  if (Number.isFinite(v)) return v;
+  const i = Math.floor(p);
+  const near = p - i < 0.5 ? [i, i + 1] : [i + 1, i];
+  for (const j of near) if (j >= 0 && j < a.length && Number.isFinite(a[j])) return a[j];
+  return NaN;
+}
 
 function sliceLap(ch: Channels, r: LapRange, sessionId: string, index: number): LapData {
   const idx: number[] = [];
@@ -28,6 +39,8 @@ function sliceLap(ch: Channels, r: LapRange, sessionId: string, index: number): 
   const gLong = ch.gLong ? new Float32Array(m) : null;
   const gLat = ch.gLat ? new Float32Array(m) : null;
   const dist = new Float64Array(m);
+  const car: CarChannels = {};
+  for (const c of CAR_CHANNELS) if (ch[c]) car[c] = new Float32Array(m);
   const t0 = valueAt(ch.t, r.pStart);
   let maxSpeed = 0;
   let minSpeed = Infinity;
@@ -39,6 +52,7 @@ function sliceLap(ch: Channels, r: LapRange, sessionId: string, index: number): 
     speed[k] = valueAt(ch.speed, p);
     if (gLong) gLong[k] = valueAt(ch.gLong!, p);
     if (gLat) gLat[k] = valueAt(ch.gLat!, p);
+    for (const c of CAR_CHANNELS) { const out = car[c]; if (out) out[k] = carAt(ch[c]!, p); }
     if (k > 0) dist[k] = dist[k - 1] + haversine(lat[k - 1], lon[k - 1], lat[k], lon[k]);
     if (speed[k] > maxSpeed) maxSpeed = speed[k];
     if (speed[k] < minSpeed) minSpeed = speed[k];
@@ -53,6 +67,7 @@ function sliceLap(ch: Channels, r: LapRange, sessionId: string, index: number): 
     startTime: t0,
     time: m > 1 ? t[m - 1] : 0,
     t, lat, lon, speed, gLong, gLat, dist,
+    ...(Object.keys(car).length ? { car } : {}),
     length: m > 1 ? dist[m - 1] : 0,
     maxSpeed,
     minSpeed: Number.isFinite(minSpeed) ? minSpeed : 0,

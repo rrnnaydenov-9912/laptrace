@@ -46,3 +46,36 @@ final class ExporterTests: XCTestCase {
         XCTAssertEqual(back[0].accel.y, -0.2, accuracy: 1e-6)
     }
 }
+
+final class OBDExportTests: XCTestCase {
+    func testOBDSampleRoundTrip() {
+        let s = OBDSample(t: 1_760_000_000.25, pids: [0x0C: 6200, 0x05: 92, 0x49: 100])
+        let back = OBDSample(csvLine: Substring(s.csvLine.trimmingCharacters(in: .newlines)))
+        XCTAssertEqual(back?.rpm, 6200)
+        XCTAssertEqual(back?.coolant, 92)
+        XCTAssertEqual(back?.pedal, 100)
+        XCTAssertNil(back?.oil, "missing PIDs stay empty, not zero")
+    }
+
+    func testOBDColumnsOnlyWhenRecorded() throws {
+        let synth = SyntheticSession()
+        let data = synth.generate()
+        let plain = try XCTUnwrap(Exporter().export(fixes: data.fixes, motion: data.motion, track: synth.track))
+        XCTAssertFalse(plain.csv.contains("RPM"))
+
+        let t0 = data.fixes[0].t
+        let obd = (0..<200).map { i in OBDSample(t: t0 + Double(i) * 0.25, pids: [0x0C: 3000 + Double(i) * 10, 0x05: 90]) }
+        let csv = try XCTUnwrap(Exporter().export(fixes: data.fixes, motion: data.motion, track: synth.track, obd: obd)).csv
+        let rows = csv.split(separator: "\n").drop { !$0.hasPrefix("Time,") }
+        let header = rows.first!.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        let rpm = try XCTUnwrap(header.firstIndex(of: "RPM"))
+        let oil = header.firstIndex { $0.hasPrefix("Oil") }
+        XCTAssertNil(oil, "oil never reported → no oil column")
+        let values = rows.dropFirst().map { $0.split(separator: ",", omittingEmptySubsequences: false) }
+        let firstRPM = values.compactMap { Double($0[rpm]) }
+        XCTAssertFalse(firstRPM.isEmpty)
+        XCTAssertTrue(firstRPM.allSatisfy { (3000...5000).contains($0) })
+        // After the OBD log ends (50 s in) the cells go empty instead of holding stale values.
+        XCTAssertTrue(values.suffix(20).allSatisfy { $0[rpm].isEmpty })
+    }
+}

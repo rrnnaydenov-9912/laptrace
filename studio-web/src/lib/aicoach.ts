@@ -4,6 +4,7 @@
 // checked against them before it is shown.
 
 import type { Consistency } from './coach';
+import type { CarSummary } from './car';
 import { fmtLap, speedFactor, speedUnit } from './format';
 import type { Goal, GoalProgress, Opportunity } from './insights';
 import { causeLabel, fmtGoalValue, goalCopy, metricName } from './insights';
@@ -32,6 +33,7 @@ You are given FACTS as JSON, measured from the driver's GPS data. Rules:
 - Respect the coaching order: consistency first, then braking, then corner speed, then throttle.
 - If FACTS contains "goal" or "goalProgress", say how they did on it.
 - If gpsNote is present, mention once that small differences may be measurement noise.
+- If FACTS contains "car" (data from the car's OBD port), use it: shift points, time at full throttle, coasting and engine temperatures. A temperature warning in car.observations always comes first.
 Format the debrief in Markdown exactly like this:
 ## Summary
 Two or three sentences.
@@ -106,6 +108,8 @@ export interface FactsInput {
   goalProgress: GoalProgress | null;
   nextGoal: Goal | null;
   lowRateGps: boolean;
+  /** OBD summary when the session recorded the car. */
+  car?: CarSummary | null;
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -163,6 +167,20 @@ export function buildFacts(i: FactsInput): Facts {
   if (i.nextGoal) {
     const c = goalCopy(i.nextGoal);
     facts.suggestedNextGoal = { title: c.title, why: c.why, how: c.how };
+  }
+  if (i.car) {
+    const r = i.car.ref;
+    const c: Record<string, unknown> = {};
+    if (r.maxRpm != null) c.referenceLapMaxRpm = Math.round(r.maxRpm / 50) * 50;
+    if (r.shiftRpm != null) c.referenceLapUpshiftRpm = Math.round(r.shiftRpm / 50) * 50;
+    if (i.car.sessionMaxRpm != null) c.sessionMaxRpm = Math.round(i.car.sessionMaxRpm / 50) * 50;
+    if (r.fullThrottlePct != null) c.referenceLapFullThrottlePercent = Math.round(r.fullThrottlePct);
+    if (r.coastSeconds != null) c.referenceLapCoastingSeconds = r1(r.coastSeconds);
+    if (r.coolantMax != null) c.coolantMaxC = Math.round(r.coolantMax);
+    if (r.oilMax != null) c.oilMaxC = Math.round(r.oilMax);
+    if (r.intakeMax != null) c.intakeMaxC = Math.round(r.intakeMax);
+    c.observations = i.car.advice.map((a) => a.text);
+    facts.car = c;
   }
   if (i.lowRateGps) facts.gpsNote = 'Phone GPS updates about once a second, so differences under about 0.2 s or 5 m may be noise.';
   return JSON.parse(JSON.stringify(facts));

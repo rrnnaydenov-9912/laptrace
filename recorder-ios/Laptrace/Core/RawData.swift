@@ -65,6 +65,46 @@ struct MotionSample {
     }
 }
 
+/// One reading of the car's data from the OBD reader. Any channel may be missing: the car may not
+/// report it, or this poll didn't ask for it (temperatures are polled less often).
+struct OBDSample: Equatable {
+    var t: Double              // Unix seconds
+    var rpm: Double?
+    var speed: Double?         // km/h, the car's own speedometer reading
+    var throttle: Double?      // %, throttle plate
+    var pedal: Double?         // %, accelerator pedal
+    var load: Double?          // %, calculated engine load
+    var coolant: Double?       // °C
+    var oil: Double?           // °C
+    var intake: Double?        // °C
+
+    static let channels: [WritableKeyPath<OBDSample, Double?>] = [\.rpm, \.speed, \.throttle, \.pedal, \.load, \.coolant, \.oil, \.intake]
+
+    /// Fills channels from decoded service 01 values keyed by PID.
+    init(t: Double, pids: [UInt8: Double]) {
+        self.t = t
+        rpm = pids[0x0C]; speed = pids[0x0D]; throttle = pids[0x11]; pedal = pids[0x49]
+        load = pids[0x04]; coolant = pids[0x05]; oil = pids[0x5C]; intake = pids[0x0F]
+    }
+
+    init(t: Double) { self.t = t }
+
+    var isEmpty: Bool { Self.channels.allSatisfy { self[keyPath: $0] == nil } }
+
+    var csvLine: String {
+        var parts = [String(format: "%.3f", t)]
+        for k in Self.channels { parts.append(self[keyPath: k].map { String(format: "%.1f", $0) } ?? "") }
+        return parts.joined(separator: ",") + "\n"
+    }
+
+    init?(csvLine line: Substring) {
+        let f = line.split(separator: ",", omittingEmptySubsequences: false)
+        guard f.count == 1 + Self.channels.count, let t = Double(f[0]) else { return nil }
+        self.t = t
+        for (i, k) in Self.channels.enumerated() { self[keyPath: k] = Double(f[i + 1]) }
+    }
+}
+
 /// Buffered append-only file writer, safe to call from any thread.
 final class AppendWriter {
     private let handle: FileHandle
@@ -109,6 +149,11 @@ enum RawFiles {
     static func readFixes(_ url: URL) -> [GPSFix] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
         return text.split(separator: "\n").compactMap(GPSFix.init(csvLine:))
+    }
+
+    static func readOBD(_ url: URL) -> [OBDSample] {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return text.split(separator: "\n").compactMap(OBDSample.init(csvLine:))
     }
 
     static func readMotion(_ url: URL) -> [MotionSample] {

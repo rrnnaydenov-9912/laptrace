@@ -1,5 +1,5 @@
 // Stacked uPlot charts vs reference distance: speed, time delta, longitudinal g,
-// lateral g. Shared cursor + synced zoom + lap playback.
+// lateral g, and the car's revs, accelerator and temperatures when an OBD reader recorded them. Shared cursor + synced zoom + lap playback.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import uPlot from 'uplot';
@@ -20,13 +20,28 @@ interface Props {
   theme: string;
 }
 
-type Channel = 'speed' | 'delta' | 'gLong' | 'gLat';
+type Channel = 'speed' | 'delta' | 'gLong' | 'gLat' | 'rpm' | 'pedal' | 'coolant' | 'oil';
 const PANELS: { id: Channel; title: string; unit: string; height: number }[] = [
   { id: 'speed', title: 'Speed', unit: 'km/h', height: 190 },
   { id: 'delta', title: 'Time delta vs reference', unit: 's', height: 130 },
   { id: 'gLong', title: 'Longitudinal g', unit: 'g', height: 120 },
   { id: 'gLat', title: 'Lateral g', unit: 'g', height: 120 },
+  { id: 'rpm', title: 'Revs', unit: 'rpm', height: 130 },
+  { id: 'pedal', title: 'Accelerator', unit: '%', height: 110 },
+  { id: 'coolant', title: 'Coolant temperature', unit: '°C', height: 100 },
+  { id: 'oil', title: 'Oil temperature', unit: '°C', height: 100 },
 ];
+
+/** The values to draw for one lap. Car channels come from the OBD reader; pedal falls back to throttle. */
+function channelOf(l: AlignedLap, id: Channel): ArrayLike<number> | null | undefined {
+  switch (id) {
+    case 'rpm': return l.car.rpm;
+    case 'pedal': return l.car.pedal ?? l.car.throttle;
+    case 'coolant': return l.car.coolant;
+    case 'oil': return l.car.oil;
+    default: return l[id];
+  }
+}
 
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -63,7 +78,7 @@ function Panel({
     if (!host) return;
     const n = ws.ref.s.length;
     const xs = Array.from(ws.ref.s);
-    const data: uPlot.AlignedData = [xs, ...laps.map((l) => toSeries(l[id], n, id === 'speed' ? speedFactor() : 1))];
+    const data: uPlot.AlignedData = [xs, ...laps.map((l) => toSeries(channelOf(l, id), n, id === 'speed' ? speedFactor() : 1))];
     const grid = cssVar('--grid', 'rgba(128,128,128,.15)');
     const axis = cssVar('--muted', '#888');
     const axisCfg = { stroke: axis, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, font: '11px system-ui, sans-serif' };
@@ -243,6 +258,7 @@ export function TelemetryCharts({ ws, laps, colors, labels, focusKey, hasG, them
   const panels = PANELS.filter((p) => {
     if (p.id === 'gLong') return hasG && aligned.some((a) => a.gLong);
     if (p.id === 'gLat') return hasG && aligned.some((a) => a.gLat);
+    if (p.id === 'rpm' || p.id === 'pedal' || p.id === 'coolant' || p.id === 'oil') return aligned.some((a) => channelOf(a, p.id));
     return true;
   });
 

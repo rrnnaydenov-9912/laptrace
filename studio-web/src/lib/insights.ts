@@ -9,6 +9,7 @@ import type { LapCornerStats } from './coach';
 import type { LapData } from './types';
 import type { Workspace } from './workspace';
 import { fmtSpeedU } from './format';
+import { pedalOf, THROTTLE_ON } from './car';
 
 export type Cause = 'braking' | 'minSpeed' | 'throttle' | 'exit' | 'unclear';
 
@@ -137,11 +138,13 @@ export const DRIVE_ACCEL = 2;
 
 /**
  * Classify each sample as braking, accelerating or coasting. Uses longitudinal
- * g when present, otherwise the speed change over about ±0.5 s.
+ * g when present, otherwise the speed change over about ±0.5 s. When the car's
+ * pedal was recorded, it decides throttle against coast outside braking.
  */
 export function driveStates(lap: LapData, brakeG = -0.15, accelG = 0.08): Uint8Array {
   const n = lap.t.length;
   const out = new Uint8Array(n);
+  const pedal = pedalOf(lap);
   for (let i = 0; i < n; i++) {
     let g = NaN;
     if (lap.gLong && Number.isFinite(lap.gLong[i])) g = lap.gLong[i];
@@ -153,6 +156,8 @@ export function driveStates(lap: LapData, brakeG = -0.15, accelG = 0.08): Uint8A
       const dt = lap.t[b] - lap.t[a];
       if (dt > 0) g = ((lap.speed[b] - lap.speed[a]) / 3.6 / dt) / 9.80665;
     }
+    const p = pedal?.[i];
+    if (p != null && Number.isFinite(p) && !(g <= brakeG)) { out[i] = p > THROTTLE_ON ? DRIVE_ACCEL : DRIVE_COAST; continue; }
     out[i] = g <= brakeG ? DRIVE_BRAKE : g >= accelG ? DRIVE_ACCEL : DRIVE_COAST;
   }
   return out;

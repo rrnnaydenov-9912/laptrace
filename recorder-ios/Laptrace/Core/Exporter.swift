@@ -15,7 +15,29 @@ struct Exporter {
         var gWindow: Double = 0.15        // ± seconds averaged per g-force row
         var device: String = "iPhone"
         var extraMeta: [(key: String, value: String)] = []   // optional Driver / Vehicle / Notes / Video Start UTC
+        var obdSource: String?            // the OBD reader, when car data was recorded
     }
+
+    /// A car-data column: CSV header, where it lives on a sample, and how far apart two readings
+    /// may be and still be blended (fast channels) or held (slowly polled temperatures).
+    struct OBDColumn {
+        let header: String
+        let key: KeyPath<OBDSample, Double?>
+        let maxGap: Double
+        let hold: Double
+        let decimals: Int
+    }
+
+    static let obdColumns: [OBDColumn] = [
+        OBDColumn(header: "RPM", key: \.rpm, maxGap: 1.5, hold: 0.5, decimals: 0),
+        OBDColumn(header: "Throttle (%)", key: \.throttle, maxGap: 1.5, hold: 0.5, decimals: 1),
+        OBDColumn(header: "Pedal (%)", key: \.pedal, maxGap: 1.5, hold: 0.5, decimals: 1),
+        OBDColumn(header: "Engine Load (%)", key: \.load, maxGap: 1.5, hold: 0.5, decimals: 1),
+        OBDColumn(header: "OBD Speed (km/h)", key: \.speed, maxGap: 1.5, hold: 0.5, decimals: 0),
+        OBDColumn(header: "Coolant (°C)", key: \.coolant, maxGap: 20, hold: 15, decimals: 0),
+        OBDColumn(header: "Oil (°C)", key: \.oil, maxGap: 20, hold: 15, decimals: 0),
+        OBDColumn(header: "Intake (°C)", key: \.intake, maxGap: 20, hold: 15, decimals: 0),
+    ]
 
     struct Calibration {
         var calibrated: Bool
@@ -50,13 +72,14 @@ struct Exporter {
         var acc: Double
         var fix: Bool
         var lap: Int = 0
+        var obd: [Double?] = []   // one entry per used OBD column
     }
 
     var options = Options()
 
     // MARK: - Public
 
-    func export(fixes rawFixes: [GPSFix], motion: [MotionSample], track: Track?) -> (csv: String, summary: Summary)? {
+    func export(fixes rawFixes: [GPSFix], motion: [MotionSample], track: Track?, obd: [OBDSample] = []) -> (csv: String, summary: Summary)? {
         let fixes = clean(rawFixes)
         guard fixes.count >= 2 else { return nil }
         let proj = LocalProjection(origin: fixes[0].latLon)
@@ -64,8 +87,9 @@ struct Exporter {
         guard rows.count >= 2 else { return nil }
         let cal = applyGForces(&rows, fixes: fixes, motion: motion)
         let laps = labelLaps(&rows, track: track)
+        let columns = applyOBD(&rows, obd)
         let summary = Summary(rows: rows.count, duration: rows.last!.t - rows.first!.t, laps: laps, calibration: cal, track: track)
-        return (render(rows, summary: summary), summary)
+        return (render(rows, summary: summary, obdColumns: columns), summary)
     }
 
     /// Interpolated laps (local metres) for the debrief; no g-force work.
@@ -257,9 +281,45 @@ struct Exporter {
         return timer.laps
     }
 
+    // MARK: - Car data
+
+    /// Puts car readings on the row grid. Returns the columns that got at least one value; each
+    /// row's `obd` then lines up with them. Cells with no reading close enough stay nil.
+    func applyOBD(_ rows: inout [Row], _ samples: [OBDSample]) -> [OBDColumn] {
+        let sorted = samples.sorted { $0.t < $1.t }
+        var used: [OBDColumn] = []
+        var values: [[Double?]] = []
+        for col in Self.obdColumns {
+            let pts = sorted.compactMap { s in s[keyPath: col.key].map { (t: s.t, v: $0) } }
+            guard !pts.isEmpty else { continue }
+            let ts = pts.map(\.t)
+            let column = rows.map { Self.sample(pts, ts, at: $0.t, maxGap: col.maxGap, hold: col.hold) }
+            guard column.contains(where: { $0 != nil }) else { continue }
+            used.append(col)
+            values.append(column)
+        }
+        for i in rows.indices { rows[i].obd = values.map { $0[i] } }
+        return used
+    }
+
+    /// Linear blend between the readings either side of `t` when they are close enough together,
+    /// else the nearest reading if it is within `hold` seconds.
+    static func sample(_ pts: [(t: Double, v: Double)], _ ts: [Double], at t: Double, maxGap: Double, hold: Double) -> Double? {
+        let j = lowerBound(ts, t)
+        let next = j < pts.count ? pts[j] : nil
+        let prev = j > 0 ? pts[j - 1] : nil
+        if let a = prev, let b = next, b.t - a.t <= maxGap {
+            let span = b.t - a.t
+            return span > 0 ? a.v + (b.v - a.v) * (t - a.t) / span : b.v
+        }
+        let near = [prev, next].compactMap { $0 }.min { abs($0.t - t) < abs($1.t - t) }
+        if let near, abs(near.t - t) <= hold { return near.v }
+        return nil
+    }
+
     // MARK: - CSV
 
-    func render(_ rows: [Row], summary: Summary) -> String {
+    func render(_ rows: [Row], summary: Summary, obdColumns: [OBDColumn] = []) -> String {
         let hasLaps = !summary.laps.isEmpty
         let hasVert = rows.contains { $0.vert != nil }
         let iso = ISO8601DateFormatter()
@@ -273,6 +333,7 @@ struct Exporter {
         s += meta("GPS Source", "Phone GPS ~1 Hz interpolated to \(Int(options.rateHz)) Hz")
         s += meta("G-Force Source", summary.calibration.source)
         s += meta("Lateral Sign", "positive = right turn")
+        if !obdColumns.isEmpty { s += meta("OBD Source", options.obdSource ?? "OBD reader") }
         if let best = summary.best { s += meta("Best Lap", String(format: "Lap %d %.3f s", best.number, best.duration)) }
         for (k, v) in options.extraMeta where !v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             s += "\(k),\(Exporter.quoted(v))\n"
@@ -283,6 +344,7 @@ struct Exporter {
         header += ["Latitude", "Longitude", "Altitude (m)", "Speed (km/h)", "Heading (deg)", "Longitudinal (g)", "Lateral (g)"]
         if hasVert { header.append("Vertical (g)") }
         header += ["GPS Accuracy (m)", "GPS Fix"]
+        header += obdColumns.map(\.header)
         s += header.joined(separator: ",") + "\n"
         for r in rows {
             var line = fmt(r.t, 2)
@@ -290,7 +352,11 @@ struct Exporter {
             line += "," + fmt(r.p.lat, 7) + "," + fmt(r.p.lon, 7) + "," + fmt(r.alt, 1) + "," + fmt(r.speed * 3.6, 2)
             line += "," + fmt(r.heading, 1) + "," + fmt(r.long, 3) + "," + fmt(r.lat, 3)
             if hasVert { line += "," + fmt(r.vert ?? 1, 3) }
-            line += "," + fmt(r.acc, 1) + "," + (r.fix ? "1" : "0") + "\n"
+            line += "," + fmt(r.acc, 1) + "," + (r.fix ? "1" : "0")
+            for (k, col) in obdColumns.enumerated() {
+                line += "," + (k < r.obd.count ? r.obd[k].map { fmt($0, col.decimals) } ?? "" : "")
+            }
+            line += "\n"
             s += line
         }
         return s

@@ -11,12 +11,19 @@ const MAX_SPEED_KMH = 650;
 
 type Field =
   | 'time' | 'lap' | 'lat' | 'lon' | 'alt' | 'speed' | 'heading'
-  | 'gLong' | 'gLat' | 'gVert' | 'accuracy' | 'fix' | 'gx' | 'gy' | 'gz';
+  | 'gLong' | 'gLat' | 'gVert' | 'accuracy' | 'fix' | 'gx' | 'gy' | 'gz'
+  | 'rpm' | 'throttle' | 'pedal' | 'load' | 'obdSpeed' | 'coolant' | 'oil' | 'intake';
+
+/** Car channels read over OBD. Blank cells mean no reading at that row. */
+const OBD_FIELDS = ['rpm', 'throttle', 'pedal', 'load', 'obdSpeed', 'coolant', 'oil', 'intake'] as const;
+type OBDField = typeof OBD_FIELDS[number];
 
 const FIELD_LABEL: Record<Field, string> = {
   time: 'Time', lap: 'Lap', lat: 'Latitude', lon: 'Longitude', alt: 'Altitude', speed: 'Speed',
   heading: 'Heading', gLong: 'Longitudinal g', gLat: 'Lateral g', gVert: 'Vertical g',
   accuracy: 'GPS accuracy', fix: 'GPS fix', gx: 'G-force X', gy: 'G-force Y', gz: 'G-force Z',
+  rpm: 'Engine speed', throttle: 'Throttle', pedal: 'Accelerator pedal', load: 'Engine load',
+  obdSpeed: 'Car speed (OBD)', coolant: 'Coolant temperature', oil: 'Oil temperature', intake: 'Intake air temperature',
 };
 
 const ALIASES: Record<Field, string[]> = {
@@ -35,6 +42,14 @@ const ALIASES: Record<Field, string[]> = {
   gx: ['gforcex', 'gx', 'accx', 'accelx', 'accelerationx', 'xg', 'gforcexg'],
   gy: ['gforcey', 'gy', 'accy', 'accely', 'accelerationy', 'yg', 'gforceyg'],
   gz: ['gforcez', 'gz', 'accz', 'accelz', 'accelerationz', 'zg', 'gforcezg'],
+  rpm: ['rpm', 'enginespeed', 'revs', 'enginerpm'],
+  throttle: ['throttle', 'throttleposition', 'tps'],
+  pedal: ['pedal', 'acceleratorpedal', 'pedalposition', 'accelerator'],
+  load: ['engineload', 'load'],
+  obdSpeed: ['obdspeed', 'vehiclespeed', 'carspeed'],
+  coolant: ['coolant', 'coolanttemp', 'coolanttemperature'],
+  oil: ['oil', 'oiltemp', 'oiltemperature'],
+  intake: ['intake', 'intaketemp', 'iat', 'intakeairtemp', 'intakeairtemperature'],
 };
 
 const FIELD_ORDER = Object.keys(ALIASES) as Field[];
@@ -350,6 +365,8 @@ export function parseCsv(text: string, fileName = 'session.csv'): ParseResult {
   const AC: number[] = [];
   const FX: number[] = [];
   const LP: string[] = [];
+  const OBD = Object.fromEntries(OBD_FIELDS.map((f) => [f, [] as number[]])) as Record<OBDField, number[]>;
+  const obdCols = OBD_FIELDS.filter((f) => idx[f] != null);
 
   const spF = speedFactor(idx.speed != null ? headerCells[idx.speed].unit : null);
   const glF = gFactor(gLongCol != null ? headerCells[gLongCol].unit : null);
@@ -418,6 +435,7 @@ export function parseCsv(text: string, fileName = 'session.csv'): ParseResult {
       const v = c[idx.fix].toLowerCase();
       FX.push(v === 'true' || v === 'yes' || Number(v) >= 1 ? 1 : 0);
     }
+    for (const f of obdCols) OBD[f].push(parseNumber(c[idx[f]!], decimalComma));
     if (idx.lap != null) {
       const raw = c[idx.lap] ?? '';
       const clean = sanitizeLabel(raw);
@@ -527,6 +545,7 @@ export function parseCsv(text: string, fileName = 'session.csv'): ParseResult {
     fix: FX.length === n ? Uint8Array.from(FX) : null,
     lap: LP.length === n ? LP : null,
   };
+  for (const f of obdCols) channels[f] = toF32(OBD[f]);
 
   // 8. Session date.
   const absolute = timeMode != null && timeMode.startsWith('unix') || timeMode === 'iso';

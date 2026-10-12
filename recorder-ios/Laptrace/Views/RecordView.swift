@@ -8,6 +8,7 @@ struct RecordView: View {
     @State private var sfMessage: String?
     @State private var videoMarked = false
     @State private var showSettings = false
+    @State private var showDash = false
     @AppStorage("checklistDone") private var checklistDone = false
 
     /// The running recording's mode, or the one picked for the next recording.
@@ -49,6 +50,7 @@ struct RecordView: View {
             }
             .sheet(isPresented: $showTrackPicker) { TrackPicker() }
             .sheet(isPresented: $showSettings) { RecordSettings() }
+            .fullScreenCover(isPresented: $showDash) { TrackDashView() }
             .sheet(item: Binding(get: { rec.lastStopped }, set: { rec.lastStopped = $0 })) { DebriefSheet(meta: $0) }
             .overlay { if !checklistDone && rec.state == .idle { checklist } }
             .onAppear { rec.startPreview() }
@@ -236,6 +238,14 @@ struct RecordView: View {
             }
 
             if !isDrive {
+            Button { showDash = true } label: {
+                Label("Track screen", systemImage: "gauge.with.dots.needle.67percent")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.indigo)
+
             Button {
                 sfMessage = rec.setStartFinishHere()
                     ? "Start/finish line set here. Laps count from your next crossing."
