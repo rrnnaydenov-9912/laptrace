@@ -9,17 +9,38 @@ struct TrackDashView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.2)) { _ in
-            VStack(spacing: 10) {
-                topBar
-                LineMap(line: rec.line)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                cueRow
-                gauges
-                pedals
-                temps
+            GeometryReader { geo in
+                VStack(spacing: 8) {
+                    // Upper half: clock, line and the next-corner cue.
+                    VStack(spacing: 8) {
+                        topBar
+                        LineMap(line: rec.line)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+                        cueRow
+                    }
+                    .frame(height: (geo.size.height - 8) / 2)
+
+                    // Lower half: the numbers, big enough to read at a glance.
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            tile(String(format: "%.0f", speedKmh), "km/h", color: .white)
+                            tile(rpm.map { String(format: "%.0f", $0) } ?? "–", "rpm",
+                                 color: (rpm ?? 0) > 6_200 ? .red : .white)
+                        }
+                        .frame(maxHeight: .infinity)
+                        pedals
+                        HStack(spacing: 8) {
+                            temp("Coolant", obd.values[0x05], warn: 105, cold: 70)
+                            temp("Oil", obd.values[0x5C], warn: 130, cold: 80)
+                            temp("Intake", obd.values[0x0F], warn: 55, cold: nil)
+                        }
+                        .frame(maxHeight: .infinity)
+                    }
+                    .frame(height: (geo.size.height - 8) / 2)
+                }
             }
-            .padding(12)
+            .padding(10)
             .foregroundStyle(.white)
             .background(Color.black.ignoresSafeArea())
         }
@@ -28,10 +49,10 @@ struct TrackDashView: View {
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
 
-    // MARK: Top: lap clock, delta, close
+    // MARK: Top: close, lap clock, reader, delta
 
     private var topBar: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 10) {
             Button { dismiss() } label: { Image(systemName: "xmark").font(.title3.bold()) }
                 .buttonStyle(.bordered).tint(.gray)
                 .accessibilityLabel("Close track screen")
@@ -40,6 +61,7 @@ struct TrackDashView: View {
                 Text("best \(Fmt.lap(rec.best?.duration))").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            readerButton
             if let d = rec.line.now?.deltaKmh {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(String(format: "%+.0f", d)).font(.title.bold()).monospacedDigit()
@@ -57,8 +79,9 @@ struct TrackDashView: View {
             Text(cue)
                 .font(.title3.bold())
                 .multilineTextAlignment(.center)
+                .lineLimit(2).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .background(Color.orange.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
         } else {
             Text(rec.laps.isEmpty ? "Corner coaching starts after your first full lap." : " ")
@@ -66,26 +89,24 @@ struct TrackDashView: View {
         }
     }
 
-    // MARK: Speed and revs
+    // MARK: Tiles
+
+    /// One big number with its unit, filling its share of the lower half.
+    private func tile(_ value: String, _ unit: String, color: Color) -> some View {
+        VStack(spacing: 0) {
+            Text(value)
+                .font(.system(size: 96, weight: .heavy)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.3)
+                .foregroundStyle(color)
+            Text(unit).font(.headline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+    }
 
     private var speedKmh: Double {
         if obd.isLive, let v = obd.values[0x0D], rec.lastFix == nil { return v }
         return rec.speedKmh
-    }
-
-    private var gauges: some View {
-        HStack(alignment: .lastTextBaseline) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(String(format: "%.0f", speedKmh)).font(.system(size: 64, weight: .heavy)).monospacedDigit()
-                Text("km/h").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(rpm.map { String(format: "%.0f", $0) } ?? "–").font(.system(size: 44, weight: .bold)).monospacedDigit()
-                    .foregroundStyle((rpm ?? 0) > 6_200 ? .red : .white)
-                Text("rpm").font(.caption).foregroundStyle(.secondary)
-            }
-        }
     }
 
     private var rpm: Double? { obd.isLive ? obd.values[0x0C] : nil }
@@ -95,37 +116,30 @@ struct TrackDashView: View {
     private var pedals: some View {
         let pedal = obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil
         let braking = max(0, -rec.line.accelG)
-        return VStack(spacing: 6) {
+        return VStack(spacing: 8) {
             bar("Throttle", value: pedal.map { $0 / 100 } ?? 0, text: pedal.map { String(format: "%.0f%%", $0) } ?? "–", color: .green)
             bar("Brake", value: min(1, braking / 1.0), text: String(format: "%.2f g", braking), color: .red)
         }
+        .frame(maxHeight: .infinity)
     }
 
     private func bar(_ label: String, value: Double, text: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(.caption.bold()).frame(width: 62, alignment: .leading)
+        HStack(spacing: 10) {
+            Text(label).font(.title3.bold()).frame(width: 96, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.12))
-                    Capsule().fill(color).frame(width: geo.size.width * min(max(value, 0), 1))
+                    RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 8).fill(color).frame(width: geo.size.width * min(max(value, 0), 1))
                 }
             }
-            .frame(height: 14)
-            Text(text).font(.caption.monospacedDigit()).frame(width: 56, alignment: .trailing)
+            Text(text).font(.system(size: 30, weight: .bold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(width: 110, alignment: .trailing)
         }
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: Temperatures and reader status
-
-    private var temps: some View {
-        HStack(spacing: 10) {
-            temp("Coolant", obd.values[0x05], warn: 105, cold: 70)
-            temp("Oil", obd.values[0x5C], warn: 130, cold: 80)
-            temp("Intake", obd.values[0x0F], warn: 55, cold: nil)
-            Spacer(minLength: 0)
-            readerButton
-        }
-    }
 
     private func temp(_ label: String, _ v: Double?, warn: Double, cold: Double?) -> some View {
         let color: Color = {
@@ -135,9 +149,15 @@ struct TrackDashView: View {
             return .white
         }()
         return VStack(spacing: 0) {
-            Text(v.map { String(format: "%.0f°", $0) } ?? "–").font(.title3.bold()).monospacedDigit().foregroundStyle(color)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text(v.map { String(format: "%.0f°", $0) } ?? "–")
+                .font(.system(size: 64, weight: .heavy)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.3)
+                .foregroundStyle(color)
+            Text(label).font(.headline).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background((v.map { $0 >= warn } ?? false ? Color.red.opacity(0.25) : Color.white.opacity(0.06)),
+                    in: RoundedRectangle(cornerRadius: 14))
     }
 
     @ViewBuilder private var readerButton: some View {
