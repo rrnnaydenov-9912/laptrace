@@ -40,4 +40,11 @@ final class OBDDecodeTests: XCTestCase {
         XCTAssertEqual(c.first, .init(id: id, byte: 1, quiet: 1, active: 50))
         XCTAssertNil(OBDDecode.frame("BUFFER FULL", t: 0))
     }
+
+    func testTemperatures() {
+        let d = OBDDecode.mode01(["41055A5C64"])
+        XCTAssertEqual(OBDDecode.value(pid: 0x05, d[0x05]!), 50)
+        XCTAssertEqual(OBDDecode.value(pid: 0x5C, d[0x5C]!), 60)
+        XCTAssertNil(OBDDecode.mode01(["7F0112"])[0x5C])
+    }
 }

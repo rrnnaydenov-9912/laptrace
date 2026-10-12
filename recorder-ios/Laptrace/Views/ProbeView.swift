@@ -108,6 +108,12 @@ struct ProbeView: View {
                     liveValue(0x11, "% thr", "%.0f")
                     liveValue(0x49, "% pedal", "%.0f")
                 }
+                if probe.live[0x05] != nil || probe.live[0x5C] != nil {
+                    HStack {
+                        liveValue(0x05, "°C coolant", "%.0f")
+                        liveValue(0x5C, "°C oil", "%.0f")
+                    }
+                }
             }
         }
     }

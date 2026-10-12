@@ -60,6 +60,7 @@ final class OBDProbe {
             let supported = await supportedPIDs()
             await ecus()
             await rates(supported: supported)
+            await temperatures()
             await listen()
         } catch {
             note("ABORTED: \(error.localizedDescription)")
@@ -158,6 +159,31 @@ final class OBDProbe {
         let status: Step.Status = best.hz >= 5 ? .ok : .warn
         finish("rate", results.joined(separator: " · "), status)
         findings.append(String(format: "Best: %@ at %.1f Hz with %d values per reading.", best.label, best.hz, best.pids))
+    }
+
+    /// Coolant and oil temperature. Asked for even when the bitmap doesn't list them, since
+    /// some ECUs answer PIDs they don't advertise.
+    private func temperatures() async {
+        begin("temps", "Coolant and oil temperature")
+        var parts: [String] = [], missing: [String] = []
+        for (pid, name) in [(UInt8(0x05), "coolant"), (UInt8(0x5C), "oil")] {
+            let reply = (try? await cmd(String(format: "01%02X", pid), timeout: 2)) ?? []
+            if let d = OBDDecode.mode01(reply)[pid], let v = OBDDecode.value(pid: pid, d) {
+                live[pid] = v
+                parts.append(String(format: "%@ %.0f °C", name.capitalized, v))
+            } else {
+                missing.append(name)
+            }
+        }
+        var detail = parts.joined(separator: " · ")
+        if !missing.isEmpty {
+            if !detail.isEmpty { detail += ". " }
+            detail += "No \(missing.joined(separator: " or ")) temperature over standard OBD."
+        }
+        finish("temps", detail, missing.isEmpty ? .ok : .warn)
+        if missing.contains("oil") {
+            findings.append("Oil temperature isn't a standard reading on this car; it would need the engine ECU's own request.")
+        }
     }
 
     /// Passive CAN listen in four timed windows so the log shows which bytes move with which action.
