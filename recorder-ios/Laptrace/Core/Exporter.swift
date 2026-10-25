@@ -108,6 +108,14 @@ struct Exporter {
         }
     }
 
+    /// Laps with split times replayed from the GPS file, for sessions whose live timing saved none.
+    func replayLaps(fixes rawFixes: [GPSFix], track: Track?) -> [CompletedLap] {
+        let fixes = clean(rawFixes)
+        guard fixes.count >= 2 else { return [] }
+        var rows = interpolate(fixes, proj: LocalProjection(origin: fixes[0].latLon))
+        return labelLaps(&rows, track: track)
+    }
+
     /// One lap's 10 Hz channels for the telemetry overlay and the GG diagram (studio-web LapData).
     struct LapChannels {
         var number: Int
@@ -134,7 +142,12 @@ struct Exporter {
         let laps = labelLaps(&rows, track: track)
         let columns = applyOBD(&rows, obd)
         func col(_ header: String) -> Int? { columns.firstIndex { $0.header == header } }
-        let pedalCol = col("Pedal (%)"), throttleCol = col("Throttle (%)")
+        // Pedal straight from the raw readings with a wider gap than the CSV uses: a reader that
+        // can't batch PIDs may only return it every ~2 s, which would otherwise leave half the rows empty.
+        let sorted = obd.sorted { $0.t < $1.t }
+        let pedalKey: KeyPath<OBDSample, Double?> = sorted.contains { $0.pedal != nil } ? \.pedal : \.throttle
+        let pedalPts = sorted.compactMap { s in s[keyPath: pedalKey].map { (t: s.t, v: $0) } }
+        let pedalTs = pedalPts.map(\.t)
         let rpmCol = col("RPM"), coolantCol = col("Coolant (°C)"), oilCol = col("Oil (°C)"), intakeCol = col("Intake (°C)")
         func values(_ r: [Row], _ c: Int?) -> [Double?] { r.map { row in c.flatMap { row.obd[$0] } } }
         let groups = Dictionary(grouping: rows.filter { $0.lap > 0 }, by: \.lap)
@@ -143,7 +156,7 @@ struct Exporter {
             let pts = r.map { proj.project($0.p) }
             var s = [0.0]
             for i in 1..<pts.count { s.append(s[i - 1] + hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)) }
-            let pedal = r.map { row in (pedalCol.flatMap { row.obd[$0] }) ?? throttleCol.flatMap { row.obd[$0] } }
+            let pedal = r.map { Self.sample(pedalPts, pedalTs, at: $0.t, maxGap: 3, hold: 1.5) }
             let duration = n <= laps.count ? laps[n - 1].duration : r.last!.t - r.first!.t
             return LapChannels(number: n, duration: duration, s: s, speed: r.map(\.speed),
                                long: r.map(\.long), lat: r.map(\.lat), pedal: pedal, t: r.map(\.t),

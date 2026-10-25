@@ -205,7 +205,19 @@ final class OBDLive {
             if got.count < 2 { fastMode = fastMode == .multiCounted ? .multi : .single }
             return got
         case .single:
-            let pid = fast.count == 1 ? fast[0] : fast[singleIndex % 2 == 0 ? 0 : 1 + (singleIndex / 2) % (fast.count - 1)]
+            // Readers that can't batch PIDs: revs on every other query and the pedal on three of the
+            // other four, so throttle analysis gets ~2 Hz instead of one reading in six. Speed and load
+            // (GPS covers speed) share the remaining slot.
+            let rpm = fast[0]
+            let pedal = ([0x49, 0x11] as [UInt8]).first { fast.contains($0) && $0 != rpm }
+            let rest = fast.filter { $0 != rpm && $0 != pedal }
+            let slot = singleIndex % 8
+            var pid = rpm
+            if slot % 2 == 1 {
+                if slot == 7, !rest.isEmpty { pid = rest[(singleIndex / 8) % rest.count] }
+                else if let pedal { pid = pedal }
+                else if !rest.isEmpty { pid = rest[(singleIndex / 2) % rest.count] }
+            }
             singleIndex += 1
             return decode(try await link.send(Self.command([pid]), timeout: 1.5))
         }

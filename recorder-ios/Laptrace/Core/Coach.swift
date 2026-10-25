@@ -60,7 +60,7 @@ enum Coach {
         let stats = sessionStats(timed, best: ref)
 
         let refGrid = resample(ref)
-        let others = timed.filter { $0.number != ref.number }.map { aligned(resample($0), to: refGrid.s.last ?? 0) }
+        let others = timed.filter { $0.number != ref.number }.map { projected(resample($0), onto: refGrid) }
         let corners = detectCorners(refGrid)
         let zones = cornerZones(corners, length: refGrid.s.last ?? 0)
 
@@ -153,6 +153,53 @@ enum Coach {
         return out
     }
 
+    /// Express a lap on the reference lap's distance grid by projecting each point onto the reference
+    /// path (studio-web alignToReference). Laps of slightly different length then line up by track
+    /// position instead of drifting tens of metres by mid-lap. Past the lap's own coverage it holds its end values.
+    static func projected(_ g: Grid, onto ref: Grid) -> Grid {
+        let n = g.s.count, m = ref.s.count
+        guard n > 1, m > 1 else { return g }
+        var sRef = [Double](repeating: 0, count: n)
+        var k = 0, prev = 0.0
+        for i in 0..<n {
+            var best = (seg: k, f: 0.0, d2: Double.infinity)
+            func scan(_ r: Range<Int>) {
+                for j in r {
+                    let p = segment(g.x[i], g.y[i], ref, j)
+                    if p.d2 < best.d2 { best = (j, p.f, p.d2) }
+                }
+            }
+            let hi = i == 0 ? Swift.max(2, m / 10) : Swift.min(m - 1, k + 60)
+            scan((i == 0 ? 0 : Swift.max(0, k - 20))..<Swift.min(hi, m - 1))
+            // Lost the line (GPS error or a different route): look further ahead.
+            if best.d2 > 30 * 30 && i > 0 { scan(Swift.min(hi, m - 1)..<Swift.min(m - 1, k + 400)) }
+            let s = ref.s[best.seg] + best.f * (ref.s[best.seg + 1] - ref.s[best.seg])
+            sRef[i] = i == 0 ? s : Swift.max(prev, s)
+            prev = sRef[i]
+            k = best.seg
+        }
+        if sRef[0] < 15 { sRef[0] = 0 }   // the lap starts on the reference start line
+        var out = Grid(s: ref.s, t: [], x: [], y: [], v: [])
+        var j = 0
+        for s in ref.s {
+            while j < n - 2 && sRef[j + 1] < s { j += 1 }
+            let span = sRef[j + 1] - sRef[j]
+            let f = span > 0 ? Swift.min(1, Swift.max(0, (s - sRef[j]) / span)) : 0
+            func lerp(_ a: [Double]) -> Double { a[j] + (a[j + 1] - a[j]) * f }
+            out.t.append(lerp(g.t)); out.x.append(lerp(g.x)); out.y.append(lerp(g.y)); out.v.append(lerp(g.v))
+        }
+        return out
+    }
+
+    /// Closest point to (px, py) on the reference segment j → j+1: fraction along it and squared distance.
+    private static func segment(_ px: Double, _ py: Double, _ r: Grid, _ j: Int) -> (f: Double, d2: Double) {
+        let dx = r.x[j + 1] - r.x[j], dy = r.y[j + 1] - r.y[j]
+        let l2 = dx * dx + dy * dy
+        let f = l2 > 0 ? Swift.min(1, Swift.max(0, ((px - r.x[j]) * dx + (py - r.y[j]) * dy) / l2)) : 0
+        let qx = r.x[j] + f * dx - px, qy = r.y[j] + f * dy - py
+        return (f, qx * qx + qy * qy)
+    }
+
     private static func index(_ g: Grid, at s: Double) -> Int {
         min(max(lowerBound(g.s, s), 0), g.s.count - 1)
     }
@@ -190,16 +237,16 @@ enum Coach {
             let a = max(i - half, 0), b = min(i + half, n - 1)
             ks[i] = k[a...b].reduce(0, +) / Double(b - a + 1)
         }
-        var runs: [(Int, Int)] = []
-        var i = 0
-        while i < n {
-            guard abs(ks[i]) > minCurvature else { i += 1; continue }
-            var j = i
-            while j + 1 < n && abs(ks[j + 1]) > minCurvature { j += 1 }
-            if let last = runs.last, g.s[i] - g.s[last.1] < mergeGap { runs[runs.count - 1].1 = j } else { runs.append((i, j)) }
-            i = j + 1
+        // Runs of same-direction curvature; a run only absorbs the next one if it turns the same way,
+        // so a left-right sequence stays two corners instead of cancelling out (studio-web corners.ts).
+        var runs: [(a: Int, b: Int, sign: Int)] = []
+        for i in 0..<n {
+            let sign = ks[i] > minCurvature ? 1 : (ks[i] < -minCurvature ? -1 : 0)
+            guard sign != 0 else { continue }
+            if let last = runs.last, last.sign == sign, g.s[i] - g.s[last.b] <= mergeGap { runs[runs.count - 1].b = i }
+            else { runs.append((i, i, sign)) }
         }
-        return runs.compactMap { a, b in
+        return runs.compactMap { a, b, _ in
             let angle = abs(ks[a...b].reduce(0, +) * gridStep) * 180 / .pi
             guard angle >= minCornerAngle, g.s[b] - g.s[a] >= 10 else { return nil }
             return Corner(start: g.s[a], end: g.s[b], angle: angle)
@@ -222,12 +269,12 @@ enum Coach {
     }
 
     static func measure(_ g: Grid, corner c: Corner, zone: (Double, Double)) -> Measure {
-        let lo = index(g, at: c.start - 20), hi = index(g, at: c.end + 10)
+        let lo = index(g, at: Swift.max(zone.0, c.start - 20)), hi = index(g, at: Swift.min(zone.1, c.end + 10))
         var m = lo
-        for i in lo...max(lo, hi) where g.v[i] < g.v[m] { m = i }
+        for i in lo...Swift.max(lo, hi) where g.v[i] < g.v[m] { m = i }
         let z0 = index(g, at: zone.0)
-        var p = min(z0, m)
-        for i in min(z0, m)...m where g.v[i] >= g.v[p] { p = i }   // last peak = where braking starts
+        var p = Swift.min(z0, m)
+        for i in Swift.min(z0, m)...m where g.v[i] > g.v[p] { p = i }   // speed peak before the minimum = where braking starts
         let brake = (g.v[p] - g.v[m]) * 3.6 > 5 ? g.s[p] : nil
         let z1 = index(g, at: zone.1)
         let pickUp = (m...max(m, z1)).first { g.v[$0] > g.v[m] + 2 / 3.6 }.map { g.s[$0] }   // +2 km/h, as studio-web
@@ -417,11 +464,22 @@ enum CarAnalysis {
         return out
     }
 
-    static func stats(_ l: Exporter.LapChannels) -> LapStats {
+    /// The session's closed-to-open pedal range. Cars rarely report 0–100: a throttle plate typically
+    /// idles near 15% and opens to about 85%, so fixed 5%/90% thresholds would never trigger.
+    static func pedalRange(_ laps: [Exporter.LapChannels]) -> (lo: Double, hi: Double)? {
+        let v = laps.flatMap { $0.pedal.compactMap { $0 } }.sorted()
+        guard v.count >= 20, let hi = v.last else { return nil }
+        let lo = v[v.count / 50]   // 2nd percentile: idle, ignoring the odd glitch
+        return hi - lo >= 20 ? (lo, hi) : nil
+    }
+
+    /// `range` rescales the pedal to 0–100% of what this car showed in the session (see pedalRange).
+    static func stats(_ l: Exporter.LapChannels, range: (lo: Double, hi: Double)? = nil) -> LapStats {
         var full = 0.0, coast = 0.0, known = 0.0
         for i in 1..<max(l.t.count, 1) {
             let dt = l.t[i] - l.t[i - 1]
-            guard dt > 0, dt < 2, let p = l.pedal[i] else { continue }
+            guard dt > 0, dt < 2, let raw = l.pedal[i] else { continue }
+            let p = range.map { (raw - $0.lo) / ($0.hi - $0.lo) * 100 } ?? raw
             known += dt
             if p >= fullThrottle { full += dt } else if p <= throttleOn && l.long[i] > -0.15 { coast += dt }
         }

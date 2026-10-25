@@ -311,7 +311,8 @@ struct TelemetrySections: View {
             best = timed.first?.number
             compare = timed.dropFirst().first?.number
             ggLap = best
-            let stats = timed.map(CarAnalysis.stats)
+            let range = CarAnalysis.pedalRange(r.laps)
+            let stats = timed.map { CarAnalysis.stats($0, range: range) }
             car = stats.contains(where: \.hasCarData) ? stats : []
             loaded = true
         }

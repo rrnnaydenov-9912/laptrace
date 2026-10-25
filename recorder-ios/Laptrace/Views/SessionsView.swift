@@ -272,7 +272,7 @@ enum SessionAnalysis {
         guard let length = bestGrid.s.last, length > 0 else { return nil }
         var grids: [Int: Coach.Grid] = [best.number: bestGrid]
         for lap in laps where lap.number != best.number && lap.x.count > 2 {
-            grids[lap.number] = Coach.aligned(Coach.resample(lap), to: length)
+            grids[lap.number] = Coach.projected(Coach.resample(lap), onto: bestGrid)
         }
 
         var traces: [Int: [TracePoint]] = [:]
@@ -287,7 +287,9 @@ enum SessionAnalysis {
             traces[n] = pts
         }
 
-        var sectors = gateSectors(meta: meta, track: track)
+        // Live timing can miss a session (track picked late, app restarted): replay the gates from GPS.
+        let timedLaps = meta.laps.isEmpty ? Exporter().replayLaps(fixes: fixes, track: track) : meta.laps
+        var sectors = gateSectors(laps: timedLaps, track: track)
         var source = "Split gates"
         var bestTime = best.duration
         var bestLap = best.number
@@ -295,7 +297,7 @@ enum SessionAnalysis {
         if let s = sectors {
             // Gate sectors come from the recorder's own laps; compare against the same set.
             let nums = Set(s.first?.times.keys.map { $0 } ?? [])
-            let pool = meta.laps.filter { nums.contains($0.number) }
+            let pool = timedLaps.filter { nums.contains($0.number) }
             if let b = pool.min(by: { $0.duration < $1.duration }) { bestTime = b.duration; bestLap = b.number }
             lapTimes = pool.map { (number: $0.number, duration: $0.duration) }
         } else {
@@ -341,10 +343,10 @@ enum SessionAnalysis {
     }
 
     /// Sectors from the recorder's split gates, if the track has them and enough laps crossed all of them.
-    private static func gateSectors(meta: SessionMeta, track: Track?) -> [Sector]? {
+    private static func gateSectors(laps all: [CompletedLap], track: Track?) -> [Sector]? {
         guard let track, !track.splits.isEmpty else { return nil }
         let ids = track.splits.map(\.id)
-        let complete = meta.laps.filter { lap in ids.allSatisfy { lap.splits[$0] != nil } }
+        let complete = all.filter { lap in ids.allSatisfy { lap.splits[$0] != nil } }
         guard complete.count >= 2 else { return nil }
         let sortedDur = complete.map(\.duration).sorted()
         let median = sortedDur[sortedDur.count / 2]
