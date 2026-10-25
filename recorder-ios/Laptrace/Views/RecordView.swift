@@ -276,12 +276,16 @@ struct RecordSettings: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @AppStorage(LapCue.enabledKey) private var speakLaps = true
+    @AppStorage(TrackDashView.shiftKey) private var shiftRPM = 6_200
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Toggle(isOn: $speakLaps) { Label("Speak lap times", systemImage: "speaker.wave.2") }
+                    Stepper(value: $shiftRPM, in: 3_000...9_000, step: 100) {
+                        Label("Shift light at \(shiftRPM) rpm", systemImage: "gauge.with.needle")
+                    }
                 } header: {
                     Text("Track")
                 }

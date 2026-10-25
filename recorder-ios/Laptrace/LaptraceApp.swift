@@ -1,13 +1,29 @@
+import MetricKit
 import SwiftUI
 import UIKit
 
 /// Runs at every launch, including when iOS relaunches the app in the background for a location
 /// wake-up, so drive detection is listening before any UI exists.
-final class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, MXMetricManagerSubscriber {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         _ = Recorder.shared
         DriveDetection.shared.resume()
+        MXMetricManager.shared.add(self)
         return true
+    }
+
+    /// Crash, hang and CPU/disk diagnostics iOS delivers (at most daily), kept as
+    /// Documents/diagnostics/<ISO date>.json so a bad track day can be read back afterwards.
+    nonisolated func didReceive(_ payloads: [MXDiagnosticPayload]) {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("diagnostics", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let iso = ISO8601DateFormatter()
+        for (i, p) in payloads.enumerated() {
+            let stamp = iso.string(from: p.timeStampEnd).replacingOccurrences(of: ":", with: "-")
+            let name = payloads.count > 1 ? "\(stamp)-\(i).json" : "\(stamp).json"
+            try? p.jsonRepresentation().write(to: dir.appendingPathComponent(name), options: .atomic)
+        }
     }
 }
 

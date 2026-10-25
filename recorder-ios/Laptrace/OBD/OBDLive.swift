@@ -26,7 +26,13 @@ final class OBDLive {
     /// Fresh enough to show as live numbers.
     var isLive: Bool { running && (lastUpdate.map { Date().timeIntervalSince($0) < 2 } ?? false) }
 
+    /// Set by the track screen while the phone runs hot: each fast poll then waits ~100 ms so the radio and CPU cool off.
+    @ObservationIgnored var easeOffWhenHot = false
+
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var reconnect: Task<Void, Never>?
+    /// Set when the driver stops the feed by hand, so a dropped link is not brought back.
+    @ObservationIgnored private var userStopped = false
     @ObservationIgnored private var fastMode = FastMode.multiCounted
     @ObservationIgnored private var slowCombined = true
     @ObservationIgnored private var singleIndex = 0
@@ -41,6 +47,7 @@ final class OBDLive {
 
     /// Finds the reader (the last one used, else the first that looks like OBD), connects and starts.
     func autoConnect() async {
+        userStopped = false
         problem = nil
         if link.state != .ready {
             link.scan()
@@ -76,6 +83,7 @@ final class OBDLive {
 
     func start() async {
         guard !running, link.state == .ready else { return }
+        userStopped = false
         running = true
         problem = nil
         readerName = link.deviceName
@@ -87,6 +95,9 @@ final class OBDLive {
     }
 
     func stop() async {
+        userStopped = true
+        reconnect?.cancel()
+        reconnect = nil
         running = false
         await loop?.value
         loop = nil
@@ -127,6 +138,7 @@ final class OBDLive {
                 stamps.removeAll { now.timeIntervalSince($0) > 2 }
                 hz = Double(stamps.count) / 2
                 Recorder.shared.record(OBDSample(t: now.timeIntervalSince1970, pids: got))
+                if easeOffWhenHot { try? await Task.sleep(for: .milliseconds(100)) }
             } catch ELM327Link.LinkError.busy {
                 try? await Task.sleep(for: .milliseconds(50))
             } catch {
@@ -140,6 +152,28 @@ final class OBDLive {
         if link.state != .ready && problem == nil { problem = "The reader disconnected." }
         running = false
         hz = 0
+        if !userStopped && Recorder.shared.state == .recording { scheduleReconnect() }
+    }
+
+    /// The reader dropped mid-session: keep trying with backoff (1, 2, 4, 8, then every 15 s)
+    /// until it answers again or the recording ends.
+    private func scheduleReconnect() {
+        guard reconnect == nil else { return }
+        reconnect = Task { [weak self] in
+            var delay = 1.0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled, !self.userStopped,
+                      Recorder.shared.state == .recording else { break }
+                if self.running { break }
+                self.problem = "Reconnecting to the reader…"
+                if self.link.state != .ready { self.link.disconnect() }
+                await self.autoConnect()
+                if self.running { break }
+                delay = min(delay * 2, 15)
+            }
+            self?.reconnect = nil
+        }
     }
 
     private func decode(_ lines: [String]) -> [UInt8: Double] {

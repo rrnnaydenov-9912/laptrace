@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Full-screen track mode: your line against your best lap, speed and revs, pedal and brake,
@@ -5,16 +6,27 @@ import SwiftUI
 struct TrackDashView: View {
     @Environment(Recorder.self) private var rec
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(Self.shiftKey) private var shiftRPM = 6_200
+    @State private var thermal = ProcessInfo.processInfo.thermalState
+    /// Brightness before the thermal guard dimmed the screen; nil while not dimmed.
+    @State private var savedBrightness: CGFloat?
+    @State private var freeBytes: Int64?
     private var obd: OBDLive { OBDLive.shared }
 
+    static let shiftKey = "shiftRPM"
+
+    /// Serious or critical: iOS is about to throttle, so the screen redraws and polls less.
+    private var hot: Bool { thermal == .serious || thermal == .critical }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.2)) { _ in
+        TimelineView(.periodic(from: .now, by: hot ? 0.5 : 0.2)) { context in
             GeometryReader { geo in
                 VStack(spacing: 8) {
                     // Upper half: clock, line and the next-corner cue.
                     VStack(spacing: 8) {
                         DeltaBar(seconds: rec.line.now?.deltaSeconds)
                         topBar
+                        if speedKmh < 20 || rec.laps.isEmpty { readiness }
                         LineMap(line: rec.line, hint: mapHint, showLegend: speedKmh < 20)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
@@ -27,7 +39,7 @@ struct TrackDashView: View {
                         HStack(spacing: 8) {
                             tile(String(format: "%.0f", speedKmh), "km/h", color: .white)
                             tile(rpm.map { String(format: "%.0f", $0) } ?? "–", "rpm",
-                                 color: (rpm ?? 0) > 6_200 ? .red : .white)
+                                 color: atShift ? .red : .white)
                         }
                         .frame(maxHeight: .infinity)
                         pedals
@@ -44,21 +56,94 @@ struct TrackDashView: View {
             .padding(10)
             .foregroundStyle(.white)
             .background(Color.black.ignoresSafeArea())
+            // Shift light: a red frame round the whole screen, flashing on every other tick.
+            .overlay {
+                if atShift && Int(context.date.timeIntervalSinceReferenceDate / (hot ? 0.5 : 0.2)) % 2 == 0 {
+                    Rectangle().strokeBorder(Color.red, lineWidth: 18).ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+            }
             // Fixed full-screen layout: large accessibility text would truncate the labels, not help.
             .dynamicTypeSize(...DynamicTypeSize.large)
         }
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            UIDevice.current.isBatteryMonitoringEnabled = true
             DriveDetection.shared.trackScreenOpen = true
             // Keeps GPS (and the app) alive if the screen locks or another app comes forward.
             rec.startPreview(background: true)
+            applyThermal(ProcessInfo.processInfo.thermalState)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+            .receive(on: DispatchQueue.main)) { _ in
+            applyThermal(ProcessInfo.processInfo.thermalState)
+        }
+        .task {
+            while !Task.isCancelled {
+                let url = URL(fileURLWithPath: NSHomeDirectory())
+                freeBytes = (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+                    .volumeAvailableCapacityForImportantUsage
+                try? await Task.sleep(for: .seconds(30))
+            }
         }
         .onDisappear {
             DriveDetection.shared.trackScreenOpen = false
             rec.stopPreviewIfIdle()
             UIApplication.shared.isIdleTimerDisabled = rec.state == .recording
+            UIDevice.current.isBatteryMonitoringEnabled = false
+            if let b = savedBrightness { UIScreen.main.brightness = b; savedBrightness = nil }
+            obd.easeOffWhenHot = false
         }
+    }
+
+    /// Dims the screen and slows redraws and polling while hot; puts everything back once it cools.
+    private func applyThermal(_ state: ProcessInfo.ThermalState) {
+        thermal = state
+        obd.easeOffWhenHot = hot
+        if hot, savedBrightness == nil {
+            savedBrightness = UIScreen.main.brightness
+            UIScreen.main.brightness = min(UIScreen.main.brightness, 0.5)
+        } else if !hot, let b = savedBrightness {
+            UIScreen.main.brightness = b
+            savedBrightness = nil
+        }
+    }
+
+    private var atShift: Bool { (rpm ?? 0) >= Double(shiftRPM) }
+
+    // MARK: Readiness: GPS, car, battery, storage
+
+    /// Shown while slow or before the first lap, so a weak fix or a full phone is caught in the pits.
+    private var readiness: some View {
+        let hAcc = rec.lastFix?.hAcc
+        let battery = UIDevice.current.batteryLevel   // -1 when unknown
+        let gb = freeBytes.map { Double($0) / 1_000_000_000 }
+        return HStack(spacing: 6) {
+            chip("location.fill",
+                 hAcc.map { $0 > 0 ? String(format: "±%.0f m", $0) : "GPS –" } ?? "No GPS",
+                 hAcc.map { $0 > 0 && $0 <= 5 ? .green : ($0 > 0 && $0 <= 30 ? .orange : .red) } ?? .red)
+            chip("car.side.fill",
+                 obd.isLive ? String(format: "%.0f Hz", obd.hz) : "OBD off",
+                 obd.isLive ? (obd.hz >= 5 ? .green : .orange) : .secondary)
+            chip("battery.75percent",
+                 battery < 0 ? "–" : String(format: "%.0f%%", battery * 100),
+                 battery < 0 ? .secondary : (battery < 0.2 ? .red : (battery < 0.4 ? .orange : .green)))
+            chip("internaldrive",
+                 gb.map { String(format: "%.1f GB", $0) } ?? "–",
+                 gb.map { $0 < 1 ? .red : ($0 < 5 ? .orange : .green) } ?? .secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func chip(_ icon: String, _ text: String, _ color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.system(size: 15, weight: .semibold)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.06), in: Capsule())
     }
 
     /// What the empty map says, so a dark panel is never a mystery.
@@ -91,6 +176,14 @@ struct TrackDashView: View {
                 }
             }
             Spacer(minLength: 4)
+            if hot {
+                Label("Phone hot", systemImage: "thermometer.high")
+                    .font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(Color.orange, in: Capsule())
+                    .accessibilityLabel("Phone is hot, screen dimmed")
+            }
             readerButton
             delta
         }
@@ -119,8 +212,22 @@ struct TrackDashView: View {
         .frame(minWidth: 120, alignment: .trailing)
     }
 
+    /// Engine too hot, only for temperatures the car actually reports. Beats the corner cue.
+    private var tempWarning: String? {
+        if obd.reports(0x05), let c = obd.values[0x05], c >= 105 { return String(format: "Coolant %.0f° — ease off", c) }
+        if obd.reports(0x5C), let o = obd.values[0x5C], o >= 130 { return String(format: "Oil %.0f° — ease off", o) }
+        return nil
+    }
+
     @ViewBuilder private var cueRow: some View {
-        if let cue = rec.line.cue {
+        if obd.isLive, let warn = tempWarning {
+            Label(warn, systemImage: "thermometer.sun.fill")
+                .font(.system(size: 22, weight: .heavy))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(Color.red, in: RoundedRectangle(cornerRadius: 10))
+        } else if let cue = rec.line.cue {
             Text(cue)
                 .font(.system(size: 22, weight: .bold))
                 .multilineTextAlignment(.center)
