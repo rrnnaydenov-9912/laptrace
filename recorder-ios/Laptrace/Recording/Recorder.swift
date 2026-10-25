@@ -37,6 +37,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     private(set) var motionRate: Double = 0
     /// Current lap against the best lap, for the track screen.
     private(set) var line = LiveLine()
+    /// Long/lat g, read from the IMU once it is calibrated against GPS.
+    private(set) var liveG = LiveG()
     /// Acceleration timer; nil unless the acceleration screen is open.
     var accel: AccelMeter?
     var now = Date()
@@ -164,6 +166,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         fixCount = 0; motionCount = 0; motionCountAtTick = 0
         laps = []; currentLapStart = nil; lastSplit = nil
         line.reset()
+        liveG.reset()
         timer.reset()
         timer.setTrack(drive ? nil : track)
 
@@ -269,6 +272,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             s.append(to: &data)
             writer.append(data)
             self.motionCount += 1
+            DispatchQueue.main.async { self.liveG.add(s) }
         }
     }
 
@@ -300,7 +304,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         let livePedal = obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil
         guard state == .recording else {
             // Draw the line on the track screen before recording starts too; start() resets it.
-            if fix.hAcc > 0, fix.hAcc <= 30 { line.add(fix, pedal: livePedal) }
+            if fix.hAcc > 0, fix.hAcc <= 30 { line.add(fix, pedal: livePedal); liveG.add(fix) }
             return
         }
         if let w = gpsWriter, let data = fix.csvLine.data(using: .utf8) {
@@ -313,6 +317,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
             return
         }
         line.add(fix, pedal: livePedal)
+        liveG.add(fix)
         if line.takeBrakeAlert() != nil { cue.brakeWarning() }
         for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
             switch e {

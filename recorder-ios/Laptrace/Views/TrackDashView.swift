@@ -144,10 +144,13 @@ struct TrackDashView: View {
 
     private var pedals: some View {
         let pedal = obd.isLive ? (obd.values[0x49] ?? obd.values[0x11]) : nil
-        let braking = max(0, -rec.line.accelG)
+        let g = rec.liveG.reading
+        let braking = max(0, -(g?.long ?? rec.line.accelG))
+        let lat = abs(g?.lat ?? 0)
         return VStack(spacing: 8) {
             bar("Throttle", value: pedal.map { $0 / 100 } ?? 0, text: pedal.map { String(format: "%.0f%%", $0) } ?? "–", color: .green)
             bar("Brake", value: min(1, braking / 1.0), text: String(format: "%.2f g", braking), color: .red)
+            bar(g?.fromIMU == true ? "Lat·IMU" : "Lat", value: min(1, lat / 1.5), text: String(format: "%.2f g", lat), color: .orange)
         }
         .frame(maxHeight: .infinity)
     }

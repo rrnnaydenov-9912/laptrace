@@ -36,6 +36,16 @@ final class LiveLineTests: XCTestCase {
         XCTAssertLessThan(late.map(abs).max() ?? 99, 6)
     }
 
+    func testPredictionIsStableOnIdenticalLaps() {
+        var synth = SyntheticSession()
+        synth.laps = 4
+        var preds: [Double] = []
+        _ = run(synth, synth.generate().fixes) { line, _ in if let p = line.now?.predicted { preds.append(p) } }
+        XCTAssertGreaterThan(preds.count, 50)
+        let jumps = zip(preds.dropFirst(), preds).map { abs($0 - $1) }
+        XCTAssertLessThan(jumps.max() ?? 99, 0.5)
+    }
+
     func testIdenticalLapsHaveZeroTimeDeltaAndPredictTheBest() {
         var synth = SyntheticSession()
         synth.laps = 4

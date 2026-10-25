@@ -52,6 +52,7 @@ struct LiveLine {
 
     private var bestGrid: Coach.Grid?
     private var lastS: Double?
+    private var lastLocT: Double?
     private var lapStartT: Double?
     private var bestStartT: Double?   // the best lap's own line-crossing time, on its grid's clock
     private var lastT: Double?
@@ -114,6 +115,7 @@ struct LiveLine {
         current = current.suffix(1)
         lapStartT = t ?? current.last?.t
         lastS = bestGrid == nil ? nil : 0   // just crossed the line: search the start of the lap first
+        lastLocT = nil
         warned = []
         pendingAlert = nil
     }
@@ -127,7 +129,7 @@ struct LiveLine {
             best = current
             bestDuration = duration
             let g = Coach.resample(lap)
-            bestStartT = min(lapStartT ?? g.t.first ?? 0, g.t.first ?? 0)
+            bestStartT = lapStartT ?? g.t.first ?? 0
             setBest(g)
         } else if let ref = bestGrid, let length = ref.s.last {
             let g = Coach.aligned(Coach.resample(lap), to: length)
@@ -155,29 +157,50 @@ struct LiveLine {
         }
     }
 
-    /// Where we are on the best lap. Searches near the last match so close-together sections of
-    /// track (a hairpin's two legs) don't get confused.
+    /// Where we are on the best lap. Searches forward of the last match, as far as the car can have
+    /// travelled since, so close-together sections of track (a hairpin's two legs) don't get confused,
+    /// then projects onto the line between grid points so the position doesn't step at 1 Hz.
     private mutating func locate(_ p: Vec2, speed: Double, t: Double) -> Now? {
-        guard let g = bestGrid, !g.s.isEmpty else { return nil }
+        guard let g = bestGrid, g.s.count > 1 else { return nil }
         var lo = 0, hi = g.s.count - 1
         if let s = lastS {
-            lo = max(0, lowerBound(g.s, s - 30)); hi = min(g.s.count - 1, lowerBound(g.s, s + 150))
+            let dt = min(max(t - (lastLocT ?? t), 1), 5)
+            hi = min(g.s.count - 1, lowerBound(g.s, s + max(speed, 5) * dt + 50))
+            lo = min(max(0, lowerBound(g.s, s - 5)), hi)
         }
         var k = lo, d = Double.infinity
         for i in lo...hi {
             let dd = hypot(g.x[i] - p.x, g.y[i] - p.y)
             if dd < d { d = dd; k = i }
         }
-        guard d < 40 else { lastS = nil; return nil }   // off the reference line (pit lane, spin)
-        lastS = g.s[k]
-        var now = Now(s: g.s[k], bestKmh: g.v[k] * 3.6, deltaKmh: (speed - g.v[k]) * 3.6)
+        guard d < 40 else { lastS = nil; lastLocT = nil; return nil }   // off the reference line (pit lane, spin)
+        // Pick the better of the two segments either side of the nearest grid point.
+        var i = min(k, g.s.count - 2), (f, best) = Self.project(g, i, p)
+        if k > 0, k < g.s.count - 1 {
+            let before = Self.project(g, k - 1, p)
+            if before.d < best { i = k - 1; f = before.f; best = before.d }
+        }
+        func lerp(_ a: [Double]) -> Double { a[i] + (a[i + 1] - a[i]) * f }
+        let s = lerp(g.s), v = lerp(g.v)
+        lastS = s
+        lastLocT = t
+        var now = Now(s: s, bestKmh: v * 3.6, deltaKmh: (speed - v) * 3.6)
         // Past the end of the best lap's grid means we just crossed the line and the lap hasn't reset yet.
-        if let t0 = lapStartT, let b0 = bestStartT, t >= t0, k < g.s.count - 1 {
-            let delta = (t - t0) - (g.t[k] - b0)
+        // Stopped (pit, spin) the gap only grows with the clock, so hold it back until moving again.
+        if let t0 = lapStartT, let b0 = bestStartT, t >= t0, k < g.s.count - 1, speed >= 3 {
+            let delta = (t - t0) - (lerp(g.t) - b0)
             now.deltaSeconds = delta
             if let bestDuration { now.predicted = bestDuration + delta }
         }
         return now
+    }
+
+    /// Fraction along grid segment i→i+1 closest to p, and the distance to it.
+    private static func project(_ g: Coach.Grid, _ i: Int, _ p: Vec2) -> (f: Double, d: Double) {
+        let ax = g.x[i], ay = g.y[i], bx = g.x[i + 1] - ax, by = g.y[i + 1] - ay
+        let L = bx * bx + by * by
+        let f = L > 0 ? min(max(((p.x - ax) * bx + (p.y - ay) * by) / L, 0), 1) : 0
+        return (f, hypot(ax + bx * f - p.x, ay + by * f - p.y))
     }
 
     /// The corner ahead (or the one we're in) and how far away its turn-in is.
