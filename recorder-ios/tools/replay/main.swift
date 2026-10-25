@@ -3,7 +3,10 @@ import Foundation
 // Replays a recorded session (or the synthetic one) through the same Core code the recorder runs live,
 // and reports how well lap timing, the predictive gap and the g-force calibration hold up.
 //
-//   swiftc Laptrace/Core/*.swift <Fmt from LaptraceApp.swift> <Synthetic.swift without @testable> tools/replay/main.swift -o replay
+//   B=$(mktemp -d)
+//   { echo 'import Foundation'; sed -n '/^enum Fmt/,/^}/p' Laptrace/LaptraceApp.swift; } > $B/Fmt.swift
+//   grep -v '@testable' Tests/Synthetic.swift > $B/Synthetic.swift
+//   swiftc -O Laptrace/Core/*.swift Laptrace/Recording/DriveStartGate.swift $B/Fmt.swift $B/Synthetic.swift tools/replay/main.swift -o replay
 //   ./replay --synthetic
 //   ./replay <session folder> [--track <id>] [--tracks Laptrace/Resources/tracks.json]
 
@@ -80,6 +83,8 @@ var line = LiveLine()
 var laps: [CompletedLap] = []
 // (lap number, elapsed in lap, predicted lap time) for every fix with a prediction
 var predictions: [(lap: Int, elapsed: Double, predicted: Double)] = []
+// Reference lap time each lap was predicted against
+var references: [Int: Double] = [:]
 var currentLap: Int?
 for fix in fixes {
     guard fix.hAcc > 0, fix.hAcc <= 30 else { continue }
@@ -89,6 +94,7 @@ for fix in fixes {
             print("jump lap \(lap) t \(fmt(fix.t - start, 1)) s \(fmt(line.now?.s ?? -1, 0)) v \(fmt(fix.speed, 1)) pred \(fmt(last.predicted, 2))→\(fmt(p, 2))")
         }
         predictions.append((lap, fix.t - start, p))
+        if references[lap] == nil { references[lap] = line.bestDuration }
     }
     for e in timer.ingest(TimedPoint(t: fix.t, p: fix.latLon)) {
         switch e {
@@ -114,13 +120,26 @@ for (i, lap) in laps.enumerated() {
 if laps.isEmpty { print("no laps") }
 
 print("\n== Predicted lap vs actual (per fix, laps that had a reference)")
+let lostTimeThreshold = 2.0
+var cleanErrs: [Double] = [], lostLaps: [Int] = []
 for lap in laps {
     let ps = predictions.filter { $0.lap == lap.number }
     guard !ps.isEmpty else { continue }
     let errs = ps.map { abs($0.predicted - lap.duration) }
     let firstHalf = ps.filter { $0.elapsed < lap.duration / 2 }.map { abs($0.predicted - lap.duration) }
     let jumps = zip(ps.dropFirst(), ps).map { abs($0.predicted - $1.predicted) }
-    print("lap \(lap.number): n \(ps.count) · |err| p50 \(fmt(percentile(errs, 0.5), 2)) p90 \(fmt(percentile(errs, 0.9), 2)) s · first half p50 \(fmt(percentile(firstHalf, 0.5), 2)) s · fix-to-fix jump p90 \(fmt(percentile(jumps, 0.9), 2)) max \(fmt(jumps.max() ?? 0, 2)) s")
+    var row = "lap \(lap.number): n \(ps.count) · |err| p50 \(fmt(percentile(errs, 0.5), 2)) p90 \(fmt(percentile(errs, 0.9), 2)) s · first half p50 \(fmt(percentile(firstHalf, 0.5), 2)) s · fix-to-fix jump p90 \(fmt(percentile(jumps, 0.9), 2)) max \(fmt(jumps.max() ?? 0, 2)) s"
+    // Time lost against the reference can only show up in the prediction after it is lost, so a lap
+    // that drops well off the reference is flagged rather than scored as predictor error.
+    if let ref = references[lap.number] {
+        let lost = lap.duration - ref
+        row += " · vs ref \(lost >= 0 ? "+" : "")\(fmt(lost, 2)) s"
+        if lost > lostTimeThreshold { row += "  LOST TIME"; lostLaps.append(lap.number) } else { cleanErrs += errs }
+    }
+    print(row)
+}
+if !cleanErrs.isEmpty || !lostLaps.isEmpty {
+    print("clean laps (under \(fmt(lostTimeThreshold, 0)) s lost to ref): |err| p50 \(fmt(percentile(cleanErrs, 0.5), 2)) p90 \(fmt(percentile(cleanErrs, 0.9), 2)) s (n \(cleanErrs.count)) · lost-time laps: \(lostLaps.isEmpty ? "none" : lostLaps.map(String.init).joined(separator: ", "))")
 }
 
 print("\n== Live g (LiveG, motion fed up to each fix)")
