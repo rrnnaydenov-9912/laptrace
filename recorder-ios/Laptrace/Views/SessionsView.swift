@@ -3,6 +3,12 @@ import Charts
 
 struct SessionsView: View {
     @State private var store = SessionStore.shared
+    @State private var confirmEmpty = false
+
+    private var emptyCount: Int {
+        let active = Recorder.shared.session?.id
+        return store.sessions.filter { $0.isEmpty && $0.id != active }.count
+    }
 
     var body: some View {
         NavigationStack {
@@ -20,6 +26,21 @@ struct SessionsView: View {
                 }
             }
             .navigationTitle("Sessions")
+            .toolbar {
+                if emptyCount > 0 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Delete empty (\(emptyCount))", role: .destructive) { confirmEmpty = true }
+                    }
+                }
+                if !store.sessions.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) { EditButton() }
+                }
+            }
+            .confirmationDialog("Delete \(emptyCount) empty sessions?", isPresented: $confirmEmpty, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { store.deleteEmpty(except: Recorder.shared.session?.id) }
+            } message: {
+                Text("Sessions with no GPS, or no laps and under a minute and 100 m. The recording in progress is kept.")
+            }
             .navigationDestination(for: SessionMeta.self) { SessionDetail(meta: $0) }
             .onAppear { store.reload() }
         }
@@ -53,6 +74,9 @@ struct SessionDetail: View {
     @State private var summary: Exporter.Summary?
     @State private var error: String?
     @State private var working = false
+    @State private var confirmDelete = false
+    @State private var deleted = false
+    @Environment(\.dismiss) private var dismiss
 
     init(meta: SessionMeta) { _meta = State(initialValue: meta) }
 
@@ -66,9 +90,9 @@ struct SessionDetail: View {
     var body: some View {
         List {
             if !meta.isDrive {
+                LapOverlaySections(meta: meta, track: track)
                 DebriefSections(meta: meta)
                 Section {
-                    NavigationLink("Lap lines") { LapOverlayView(meta: meta, track: track) }
                     NavigationLink("Detailed analysis") { SessionAnalysisView(meta: meta, track: track) }
                 }
             } else {
@@ -140,10 +164,24 @@ struct SessionDetail: View {
             } footer: {
                 Text("10 Hz CSV in the shared Laptrace format. Raw files stay in Files › Laptrace › Sessions.")
             }
+            if meta.id != Recorder.shared.session?.id {
+                Section {
+                    Button("Delete session", role: .destructive) { confirmDelete = true }
+                }
+            }
         }
         .navigationTitle(meta.title)
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { SessionStore.shared.save(meta) }
+        .confirmationDialog("Delete this session?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                deleted = true
+                SessionStore.shared.delete(meta)
+                dismiss()
+            }
+        } message: {
+            Text("Removes the GPS, IMU and OBD files and any exported CSV.")
+        }
+        .onDisappear { if !deleted { SessionStore.shared.save(meta) } }
     }
 
     private func export() {

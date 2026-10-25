@@ -8,6 +8,19 @@ struct LapOverlayView: View {
     let track: Track?
     var focus: Int? = nil
 
+    var body: some View {
+        List { LapOverlaySections(meta: meta, track: track, focus: focus) }
+            .navigationTitle(focus.map { "Lap \($0) vs best" } ?? "Lap lines")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The lap-lines sections on their own, so the session screen can show them inline.
+struct LapOverlaySections: View {
+    let meta: SessionMeta
+    let track: Track?
+    var focus: Int? = nil
+
     struct LapLine: Identifiable {
         var id: Int { lap.number }
         let lap: Coach.Lap
@@ -35,11 +48,11 @@ struct LapOverlayView: View {
     private static let palette: [Color] = [.orange, .cyan, .pink, .yellow, .purple, .blue, .mint, .red, .teal, .indigo]
 
     var body: some View {
-        List {
+        Group {
             if !loaded {
-                ProgressView("Loading laps…")
+                Section("Lap lines") { ProgressView("Loading laps…") }
             } else if lines.isEmpty {
-                Text("No complete laps with GPS in this session.").foregroundStyle(.secondary)
+                Section("Lap lines") { Text("No complete laps with GPS in this session.").foregroundStyle(.secondary) }
             } else {
                 Section {
                     map.frame(height: 360).listRowInsets(EdgeInsets())
@@ -52,8 +65,6 @@ struct LapOverlayView: View {
                 Section("Speed (km/h)") { speedChart }
             }
         }
-        .navigationTitle(focus.map { "Lap \($0) vs best" } ?? "Lap lines")
-        .navigationBarTitleDisplayMode(.inline)
         .task(id: meta.id) {
             let id = meta.id, track = track
             let laps = await Task.detached {

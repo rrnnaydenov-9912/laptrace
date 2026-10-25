@@ -28,6 +28,8 @@ struct SessionMeta: Codable, Identifiable, Hashable {
     var duration: Double { (ended ?? Date()).timeIntervalSince(started) }
     var best: CompletedLap? { laps.min(by: { $0.duration < $1.duration }) }
     var title: String { isDrive ? "Drive" : (trackName ?? "Session") }
+    /// No GPS, or a stub: no laps, under a minute and under 100 m.
+    var isEmpty: Bool { fixCount == 0 || (laps.isEmpty && duration < 60 && (distance ?? 0) < 100) }
 
     /// Optional rows for the CSV metadata block.
     var csvMeta: [(key: String, value: String)] {
@@ -94,6 +96,14 @@ final class SessionStore {
     func delete(_ meta: SessionMeta) {
         try? FileManager.default.removeItem(at: folder(meta.id))
         reload()
+    }
+
+    /// Removes every empty session except the one being recorded. Returns how many went.
+    @discardableResult func deleteEmpty(except activeId: String? = nil) -> Int {
+        let gone = sessions.filter { $0.isEmpty && $0.id != activeId }
+        for m in gone { try? FileManager.default.removeItem(at: folder(m.id)) }
+        reload()
+        return gone.count
     }
 
     /// Builds the shared-format CSV for a session and writes it into the session folder.
