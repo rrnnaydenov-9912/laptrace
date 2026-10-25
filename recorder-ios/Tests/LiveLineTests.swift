@@ -7,7 +7,7 @@ final class LiveLineTests: XCTestCase {
                      each: ((inout LiveLine, GPSFix) -> Void)? = nil) -> (LiveLine, [Double?]) {
         let timer = LapTimer()
         timer.setTrack(synth.track)
-        var line = LiveLine(), best: Double = .infinity, deltas: [Double?] = []
+        var line = LiveLine(), deltas: [Double?] = []
         for f in fixes {
             line.add(f, pedal: pedal)
             each?(&line, f)
@@ -15,8 +15,7 @@ final class LiveLineTests: XCTestCase {
                 switch e {
                 case .lapStarted(let t): line.lapStarted(at: t)
                 case .lapCompleted(let lap):
-                    line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < best)
-                    best = min(best, lap.duration)
+                    line.lapCompleted(number: lap.number, duration: lap.duration)
                 case .split: break
                 }
             }
@@ -101,5 +100,28 @@ final class LiveLineTests: XCTestCase {
         }
         XCTAssertEqual(line.current.last?.pedal, .brake)
         XCTAssertLessThan(line.accelG, -0.5)
+    }
+
+    func testReferenceSkipsOutLapAndSlowLaps() {
+        var synth = SyntheticSession()
+        synth.laps = 5
+        let timer = LapTimer()
+        timer.setTrack(synth.track)
+        // Same geometry every lap; the durations handed over decide which lap is the reference.
+        let reported = [1: 50.0, 2: 300.0, 3: 60.0, 4: 58.0]   // short out-lap, pit lap, clean, faster
+        var line = LiveLine(), refs: [Double?] = []
+        for f in synth.generate().fixes {
+            line.add(f, pedal: nil)
+            for e in timer.ingest(TimedPoint(t: f.t, p: f.latLon)) {
+                switch e {
+                case .lapStarted(let t): line.lapStarted(at: t)
+                case .lapCompleted(let lap):
+                    line.lapCompleted(number: lap.number, duration: reported[lap.number] ?? lap.duration)
+                    refs.append(line.bestDuration)
+                case .split: break
+                }
+            }
+        }
+        XCTAssertEqual(Array(refs.prefix(4)), [50, 50, 60, 58], "out-lap only as a stand-in, pit lap never, clean lap replaces it even though slower")
     }
 }

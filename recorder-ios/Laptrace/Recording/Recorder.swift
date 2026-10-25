@@ -61,6 +61,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     @ObservationIgnored private var fixCount = 0
     @ObservationIgnored private var motionCount = 0
     @ObservationIgnored private var motionCountAtTick = 0
+    @ObservationIgnored private var lastCheckpoint = Date.distantPast
+    private static let checkpointInterval: TimeInterval = 30
     @ObservationIgnored private var tick: Timer?
     private var manualTrack = false
     /// A screen is showing live GPS. Keeps location on (in the background too) until it closes.
@@ -163,7 +165,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         motionWriter = try? AppendWriter(url: SessionStore.shared.motionURL(meta.id))
         obdWriter = try? AppendWriter(url: SessionStore.shared.obdURL(meta.id), flushThreshold: 4_096)
         obdCount = 0
-        fixCount = 0; motionCount = 0; motionCountAtTick = 0
+        fixCount = 0; motionCount = 0; motionCountAtTick = 0; lastCheckpoint = Date()
         laps = []; currentLapStart = nil; lastSplit = nil
         line.reset()
         liveG.reset()
@@ -197,30 +199,44 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         if !previewing { location.allowsBackgroundLocationUpdates = false }
         UIApplication.shared.isIdleTimerDisabled = false
         meta.ended = Date()
-        meta.fixCount = fixCount
-        meta.motionCount = motionCount
-        if obdCount > 0 { meta.obdCount = obdCount; meta.obdReader = OBDLive.shared.readerName }
+        fillProgress(&meta)
         session = nil
         state = .idle
         motionRate = 0
         let wasAuto = autoStarted
         autoStarted = false
-        if meta.isDrive {
-            meta.distance = driveDistance
-            meta.topSpeed = driveTopSpeed
-            if driveDistance < minDistance {
-                SessionStore.shared.delete(meta)
-                return nil
-            }
-        } else {
-            meta.laps = laps
-            meta.trackId = track?.id
-            meta.trackName = track?.name
+        if meta.isDrive, driveDistance < minDistance {
+            SessionStore.shared.delete(meta)
+            return nil
         }
         SessionStore.shared.save(meta)
         // The debrief is about laps; drives (manual or automatic) don't get one.
         if !wasAuto && !meta.isDrive { lastStopped = meta }
         return meta
+    }
+
+    /// Counts, laps and track so far. Shared by stop() and checkpoint().
+    private func fillProgress(_ meta: inout SessionMeta) {
+        meta.fixCount = fixCount
+        meta.motionCount = motionCount
+        if obdCount > 0 { meta.obdCount = obdCount; meta.obdReader = OBDLive.shared.readerName }
+        if meta.isDrive {
+            meta.distance = driveDistance
+            meta.topSpeed = driveTopSpeed
+        } else {
+            meta.laps = laps
+            meta.trackId = track?.id
+            meta.trackName = track?.name
+        }
+    }
+
+    /// Saves progress while recording, so a session the app never got to stop (killed, crashed,
+    /// phone died) still has its laps and counts. `ended` stays nil until stop().
+    private func checkpoint() {
+        guard state == .recording, var meta = session else { return }
+        fillProgress(&meta)
+        SessionStore.shared.save(meta)
+        lastCheckpoint = Date()
     }
 
     /// Stop pressed by the driver. Stopping an auto-started drive also pauses detection for a while,
@@ -255,6 +271,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         motionCountAtTick = n
         gpsWriter?.flush()
         obdWriter?.flush()
+        if now.timeIntervalSince(lastCheckpoint) >= Self.checkpointInterval { checkpoint() }
     }
 
     private func startMotion() {
@@ -326,8 +343,9 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
                 line.lapStarted(at: t)
             case .lapCompleted(let lap):
                 cue.speak(duration: lap.duration, previousBest: best?.duration)
-                line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < (best?.duration ?? .infinity))
+                line.lapCompleted(number: lap.number, duration: lap.duration)
                 laps.append(lap)
+                checkpoint()
                 let delta = best.map { lap.duration - $0.duration }
                 lastSplit = ("Lap \(lap.number)", lap.number == best?.number ? nil : delta)
                 Haptics.lap()

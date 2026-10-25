@@ -58,6 +58,11 @@ struct LiveLine {
     private var lastT: Double?
     private var warned: Set<Int> = []
     private var pendingAlert: Int?
+    private var durations: [Double] = []   // every completed lap since reset, out-lap included
+    private var bestIsValid = false         // false while the reference is only a provisional out-lap or slow lap
+
+    /// A lap slower than this multiple of the session median (traffic, pit, spin) never becomes the reference.
+    static let slowLapFactor = 1.15
 
     /// Metres before the best lap's brake point at which to warn the driver.
     static let brakeLead = 50.0
@@ -121,13 +126,19 @@ struct LiveLine {
     }
 
     /// Call when a lap finishes, before `lapStarted` for the next one.
-    mutating func lapCompleted(number: Int, duration: Double, isBest: Bool) {
+    /// The reference is the fastest valid lap: not the out-lap (first after reset) and within
+    /// `slowLapFactor` of the median. Until one exists the first lap stands in, so there is something to show.
+    mutating func lapCompleted(number: Int, duration: Double) {
+        durations.append(duration)
         guard current.count > 20 else { return }
         let lap = Coach.Lap(number: number, duration: duration, t: current.map(\.t), x: current.map(\.x),
                             y: current.map(\.y), speed: current.map(\.v))
-        if isBest || bestGrid == nil {
+        let sorted = durations.sorted(), median = sorted[(sorted.count - 1) / 2]   // lower median: one pit lap can't drag it up
+        let valid = durations.count > 1 && duration <= Self.slowLapFactor * median
+        if bestGrid == nil || (valid && (!bestIsValid || duration < bestDuration ?? .infinity)) {
             best = current
             bestDuration = duration
+            bestIsValid = valid
             let g = Coach.resample(lap)
             bestStartT = lapStartT ?? g.t.first ?? 0
             setBest(g)
@@ -187,7 +198,8 @@ struct LiveLine {
         var now = Now(s: s, bestKmh: v * 3.6, deltaKmh: (speed - v) * 3.6)
         // Past the end of the best lap's grid means we just crossed the line and the lap hasn't reset yet.
         // Stopped (pit, spin) the gap only grows with the clock, so hold it back until moving again.
-        if let t0 = lapStartT, let b0 = bestStartT, t >= t0, k < g.s.count - 1, speed >= 3 {
+        // A provisional reference (the out-lap) is good enough for the line, not for a lap time.
+        if bestIsValid, let t0 = lapStartT, let b0 = bestStartT, t >= t0, k < g.s.count - 1, speed >= 3 {
             let delta = (t - t0) - (lerp(g.t) - b0)
             now.deltaSeconds = delta
             if let bestDuration { now.predicted = bestDuration + delta }

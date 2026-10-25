@@ -96,8 +96,7 @@ for fix in fixes {
             line.lapStarted(at: t)
             currentLap = timer.currentLapNumber
         case .lapCompleted(let lap):
-            let best = laps.min(by: { $0.duration < $1.duration })
-            line.lapCompleted(number: lap.number, duration: lap.duration, isBest: lap.duration < (best?.duration ?? .infinity))
+            line.lapCompleted(number: lap.number, duration: lap.duration)
             laps.append(lap)
         case .split: break
         }
