@@ -101,7 +101,8 @@ struct SessionDetail: View {
                         Label("Sectors, tips and speed trace", systemImage: "chart.xyaxis.line")
                     }
                 }
-                LapOverlaySections(meta: meta, track: track)
+                LapOverlaySections(meta: meta, track: track, showSpeed: false)
+                TelemetrySections(meta: meta, track: track)
             } else {
                 DriveInsightsView(session: meta)
             }

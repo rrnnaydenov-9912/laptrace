@@ -20,6 +20,8 @@ struct LapOverlaySections: View {
     let meta: SessionMeta
     let track: Track?
     var focus: Int? = nil
+    /// Off on the session screen, where the telemetry section draws speed against the best lap.
+    var showSpeed = true
 
     struct LapLine: Identifiable {
         var id: Int { lap.number }
@@ -62,7 +64,7 @@ struct LapOverlaySections: View {
                     Text("Pinch to zoom, drag to pan, double-tap to reset. Best lap in green.")
                 }
                 Section("Gap to best lap (s, + = slower)") { deltaChart }
-                Section("Speed (km/h)") { speedChart }
+                if showSpeed { Section("Speed (km/h)") { speedChart } }
             }
         }
         .task(id: meta.id) {
@@ -237,5 +239,184 @@ struct LapOverlaySections: View {
                 .frame(height: 200)
             }
         }
+    }
+}
+
+/// Two laps against each other along the lap (speed, throttle, braking) and a G-G diagram.
+/// Ported from studio-web TelemetryCharts.tsx and GGDiagram.tsx. Braking is deceleration in g:
+/// standard OBD has no brake-pedal reading.
+struct TelemetrySections: View {
+    let meta: SessionMeta
+    let track: Track?
+
+    struct Point: Identifiable {
+        let id: Int
+        let lap: String
+        let s: Double
+        let value: Double
+    }
+
+    @State private var laps: [Exporter.LapChannels] = []
+    @State private var imu = false
+    @State private var best: Int?
+    @State private var compare: Int?
+    @State private var ggLap: Int?
+    @State private var loaded = false
+
+    var body: some View {
+        Group {
+            if !loaded {
+                Section("Telemetry") { ProgressView("Loading telemetry…") }
+            } else if let b = lap(best) {
+                let c = lap(compare)
+                Section {
+                    if laps.count > 1 {
+                        Picker("Compare lap", selection: $compare) {
+                            ForEach(laps.filter { $0.number != b.number }, id: \.number) {
+                                Text("Lap \($0.number)  \(Fmt.lap($0.duration))").tag(Optional($0.number))
+                            }
+                        }
+                    }
+                    chart("Speed (km/h)", b, c, legend: true) { l, i in l.speed[i] * 3.6 }
+                    if hasPedal(b) || c.map(hasPedal) == true {
+                        chart("Throttle (%)", b, c) { l, i in l.pedal[i] }
+                    } else {
+                        Text("No throttle: connect the OBD reader before you drive to record it.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    chart("Braking (g)", b, c) { l, i in max(0, -l.long[i]) }
+                } header: {
+                    Text("Telemetry vs best lap \(b.number)")
+                } footer: {
+                    Text("Same distance on every chart. Look for where the orange line brakes earlier, carries less speed or opens the throttle later than the green.")
+                }
+                gg(b, c)
+            }
+        }
+        .task(id: meta.id) {
+            let id = meta.id, track = track
+            let r = await Task.detached(priority: .userInitiated) {
+                let store = SessionStore.shared
+                return Exporter().lapChannels(fixes: RawFiles.readFixes(store.gpsURL(id)),
+                                              motion: RawFiles.readMotion(store.motionURL(id)),
+                                              obd: RawFiles.readOBD(store.obdURL(id)), track: track)
+            }.value
+            // Best and default comparison come from real timed laps (no pit stops: within 1.5× the median).
+            let med = Coach.median(r.laps.map(\.duration)) ?? 0
+            let timed = r.laps.filter { $0.duration > 0 && $0.duration <= med * 1.5 }.sorted { $0.duration < $1.duration }
+            laps = r.laps
+            imu = r.imu
+            best = timed.first?.number
+            compare = timed.dropFirst().first?.number
+            ggLap = best
+            loaded = true
+        }
+    }
+
+    private func lap(_ n: Int?) -> Exporter.LapChannels? { n.flatMap { n in laps.first { $0.number == n } } }
+    private func hasPedal(_ l: Exporter.LapChannels) -> Bool { l.pedal.contains { $0 != nil } }
+
+    // MARK: Charts
+
+    /// Best lap in green, the comparison lap stretched onto the best lap's length in orange.
+    private func chart(_ title: String, _ b: Exporter.LapChannels, _ c: Exporter.LapChannels?, legend: Bool = false,
+                       value: @escaping (Exporter.LapChannels, Int) -> Double?) -> some View {
+        let length = b.s.last ?? 0
+        let names = ["L\(b.number) best"] + (c.map { ["L\($0.number)"] } ?? [])
+        let data = ([b] + (c.map { [$0] } ?? [])).enumerated().flatMap { k, l -> [Point] in
+            let scale = (l.s.last ?? 0) > 0 ? length / l.s.last! : 1
+            return stride(from: 0, to: l.s.count, by: 2).compactMap { i in
+                value(l, i).map { Point(id: k * 1_000_000 + i, lap: names[k], s: l.s[i] * scale, value: $0) }
+            }
+        }
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.subheadline.weight(.semibold))
+            Chart(data) {
+                LineMark(x: .value("m", $0.s), y: .value(title, $0.value))
+                    .foregroundStyle(by: .value("Lap", $0.lap))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+            }
+            .chartForegroundStyleScale(domain: names, range: [Color.green, Color.orange].prefix(names.count).map { $0 })
+            .chartLegend(legend ? .visible : .hidden)
+            .chartXAxisLabel(Fmt.distanceAxis)
+            .frame(height: legend ? 180 : 140)
+        }
+        .padding(.vertical, 4)
+    }
+
+    // MARK: G-G diagram
+
+    @ViewBuilder private func gg(_ b: Exporter.LapChannels, _ c: Exporter.LapChannels?) -> some View {
+        let l = lap(ggLap) ?? b
+        Section {
+            if let c {
+                Picker("Lap", selection: $ggLap) {
+                    Text("Best · L\(b.number)").tag(Optional(b.number))
+                    Text("L\(c.number)").tag(Optional(c.number))
+                }
+                .pickerStyle(.segmented)
+            }
+            GGDiagram(lap: l)
+                .aspectRatio(1, contentMode: .fit)
+                .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+            HStack {
+                peak("Brake", l.long.map { -$0 }.max())
+                peak("Corner", l.lat.map(abs).max())
+                peak("Accel", l.long.max())
+            }
+        } header: {
+            Text("G-G diagram")
+        } footer: {
+            Text("Each dot is a moment of the lap: up = accelerating, down = braking, sideways = cornering; colour = speed (blue slow, red fast). A fuller circle means you use more of the grip while braking into and powering out of corners. G from \(imu ? "the phone's motion sensor" : "GPS speed and heading").")
+        }
+    }
+
+    private func peak(_ label: String, _ g: Double?) -> some View {
+        VStack(spacing: 2) {
+            Text(g.map { String(format: "%.2f g", max(0, $0)) } ?? "–").font(.headline.monospacedDigit())
+            Text("Peak \(label.lowercased())").font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// Friction circle: lateral g across (right +), longitudinal g up (accelerating +), dots coloured by speed.
+struct GGDiagram: View {
+    let lap: Exporter.LapChannels
+
+    var body: some View {
+        Canvas { ctx, size in
+            let w = min(size.width, size.height)
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let r = w / 2 * 0.92
+            let peak = zip(lap.long, lap.lat).map { max(abs($0), abs($1)) }.max() ?? 1
+            let maxG = min(3, (max(peak, 1) * 2).rounded(.up) / 2 + 0.25)
+            func px(_ g: Double) -> CGFloat { CGFloat(g / maxG) * r }
+
+            var axes = Path()
+            axes.move(to: CGPoint(x: c.x - r, y: c.y)); axes.addLine(to: CGPoint(x: c.x + r, y: c.y))
+            axes.move(to: CGPoint(x: c.x, y: c.y - r)); axes.addLine(to: CGPoint(x: c.x, y: c.y + r))
+            ctx.stroke(axes, with: .color(.gray.opacity(0.4)), lineWidth: 1)
+            for g in stride(from: 0.5, through: 2.5, by: 0.5) where g <= maxG {
+                let rr = px(g)
+                ctx.stroke(Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: 2 * rr, height: 2 * rr)),
+                           with: .color(.gray.opacity(0.35)), lineWidth: 1)
+                ctx.draw(Text(String(format: "%.1fg", g)).font(.caption2).foregroundStyle(.secondary),
+                         at: CGPoint(x: c.x + rr * 0.71 + 12, y: c.y - rr * 0.71))
+            }
+            let labels: [(String, CGPoint)] = [("Accel", CGPoint(x: c.x, y: c.y - r + 8)), ("Brake", CGPoint(x: c.x, y: c.y + r - 8)),
+                                               ("Left", CGPoint(x: c.x - r + 16, y: c.y - 10)), ("Right", CGPoint(x: c.x + r - 18, y: c.y - 10))]
+            for (s, at) in labels { ctx.draw(Text(s).font(.caption2.bold()).foregroundStyle(.secondary), at: at) }
+
+            let vMin = lap.speed.min() ?? 0, vMax = max(lap.speed.max() ?? 1, vMin + 1)
+            for i in lap.long.indices {
+                let p = CGPoint(x: c.x + px(lap.lat[i]), y: c.y - px(lap.long[i]))
+                let f = (lap.speed[i] - vMin) / (vMax - vMin)
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 2, y: p.y - 2, width: 4, height: 4)),
+                         with: .color(Color(hue: 0.66 * (1 - f), saturation: 0.9, brightness: 0.95).opacity(0.75)))
+            }
+        }
+        .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityLabel("G-G diagram of lateral against longitudinal acceleration for lap \(lap.number)")
     }
 }

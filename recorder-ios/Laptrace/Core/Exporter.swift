@@ -108,6 +108,42 @@ struct Exporter {
         }
     }
 
+    /// One lap's 10 Hz channels for the telemetry overlay and the GG diagram (studio-web LapData).
+    struct LapChannels {
+        var number: Int
+        var duration: Double
+        var s: [Double]        // metres from the start line
+        var speed: [Double]    // m/s
+        var long: [Double]     // g, + = accelerating
+        var lat: [Double]      // g, + = turning right
+        var pedal: [Double?]   // %, accelerator pedal, else throttle plate; nil without car data
+    }
+
+    /// Laps with g-forces (phone IMU when it calibrates, else GPS) and the car's pedal.
+    func lapChannels(fixes rawFixes: [GPSFix], motion: [MotionSample], obd: [OBDSample], track: Track?) -> (laps: [LapChannels], imu: Bool) {
+        let fixes = clean(rawFixes)
+        guard fixes.count >= 2 else { return ([], false) }
+        let proj = LocalProjection(origin: fixes[0].latLon)
+        var rows = interpolate(fixes, proj: proj)
+        let cal = applyGForces(&rows, fixes: fixes, motion: motion)
+        let laps = labelLaps(&rows, track: track)
+        let columns = applyOBD(&rows, obd)
+        let pedalCol = columns.firstIndex { $0.header == "Pedal (%)" }
+        let throttleCol = columns.firstIndex { $0.header == "Throttle (%)" }
+        let groups = Dictionary(grouping: rows.filter { $0.lap > 0 }, by: \.lap)
+        let out = groups.keys.sorted().compactMap { n -> LapChannels? in
+            guard let r = groups[n], r.count >= 2 else { return nil }
+            let pts = r.map { proj.project($0.p) }
+            var s = [0.0]
+            for i in 1..<pts.count { s.append(s[i - 1] + hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)) }
+            let pedal = r.map { row in (pedalCol.flatMap { row.obd[$0] }) ?? throttleCol.flatMap { row.obd[$0] } }
+            let duration = n <= laps.count ? laps[n - 1].duration : r.last!.t - r.first!.t
+            return LapChannels(number: n, duration: duration, s: s, speed: r.map(\.speed),
+                               long: r.map(\.long), lat: r.map(\.lat), pedal: pedal)
+        }
+        return (out, cal.calibrated)
+    }
+
     // MARK: - Fix cleaning
 
     func clean(_ input: [GPSFix]) -> [GPSFix] {
