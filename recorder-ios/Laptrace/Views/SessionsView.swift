@@ -68,6 +68,7 @@ struct SessionDetail: View {
             if !meta.isDrive {
                 DebriefSections(meta: meta)
                 Section {
+                    NavigationLink("Lap lines") { LapOverlayView(meta: meta, track: track) }
                     NavigationLink("Detailed analysis") { SessionAnalysisView(meta: meta, track: track) }
                 }
             }
@@ -99,14 +100,14 @@ struct SessionDetail: View {
             if !meta.isDrive && !meta.laps.isEmpty {
                 Section("Laps (live timing)") {
                     ForEach(meta.laps) { lap in
-                        HStack {
+                        NavigationLink { LapOverlayView(meta: meta, track: track, focus: lap.number) } label: { HStack {
                             Text("Lap \(lap.number)")
                             Spacer()
                             Text(Fmt.lap(lap.duration))
                                 .monospacedDigit()
                                 .fontWeight(lap.number == meta.best?.number ? .bold : .regular)
                                 .foregroundStyle(lap.number == meta.best?.number ? .green : .primary)
-                        }
+                        } }
                     }
                 }
             }
