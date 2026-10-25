@@ -1,5 +1,7 @@
 # Laptrace Studio
 
+> **Retired — the iPhone app is the product.** No new features land here; the analysis is being ported to the iOS app (`recorder-ios/`), starting with potential best and the corner table on the session screen. The code stays as the reference for those ports.
+
 Browser app for analysing track-day lap telemetry from CSV files (for example, the Laptrace iPhone recorder export). Everything runs locally in the browser. Sessions are kept in IndexedDB and are never uploaded.
 
 ## Run
