@@ -114,7 +114,9 @@ struct RecordView: View {
 
     private var driveClock: some View {
         VStack(spacing: 4) {
-            Text(rec.state == .recording ? (rec.autoStarted ? "Drive · started automatically" : "Drive") : "Road drive")
+            Text(rec.state != .recording ? "Road drive"
+                 : !rec.driveStarted ? "Waiting for the car to move (100 m, over 10 km/h)"
+                 : rec.autoStarted ? "Drive · started automatically" : "Drive")
                 .font(.headline)
                 .foregroundStyle(.secondary)
             Text(rec.elapsed.map(Fmt.duration) ?? "0:00")

@@ -22,6 +22,9 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     private(set) var driveDistance: Double = 0
     private(set) var driveTopSpeed: Double = 0
     @ObservationIgnored private var lastDriveFix: GPSFix?
+    /// A drive only counts once the car has moved 100 m and is above 10 km/h (DriveStartGate).
+    private(set) var driveStarted = false
+    @ObservationIgnored private var driveGate = DriveStartGate()
     /// Fixes go to this hook too, so drive detection can watch speed without its own manager.
     @ObservationIgnored var onFix: ((GPSFix) -> Void)?
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
@@ -157,6 +160,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         autoStarted = auto
         let drive = self.mode == .drive
         driveDistance = 0; driveTopSpeed = 0; lastDriveFix = nil
+        driveGate = DriveStartGate(); driveStarted = false
         let meta = drive
             ? SessionStore.shared.create(trackId: nil, trackName: nil, mode: "drive")
             : SessionStore.shared.create(trackId: track?.id, trackName: track?.name)
@@ -205,7 +209,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         motionRate = 0
         let wasAuto = autoStarted
         autoStarted = false
-        if meta.isDrive, driveDistance < minDistance {
+        if meta.isDrive, !driveStarted || driveDistance < minDistance {
             SessionStore.shared.delete(meta)
             return nil
         }
@@ -234,9 +238,11 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     /// phone died) still has its laps and counts. `ended` stays nil until stop().
     private func checkpoint() {
         guard state == .recording, var meta = session else { return }
+        lastCheckpoint = Date()
+        // A drive that hasn't started moving isn't worth saving yet.
+        if meta.isDrive && !driveStarted { return }
         fillProgress(&meta)
         SessionStore.shared.save(meta)
-        lastCheckpoint = Date()
     }
 
     /// Stop pressed by the driver. Stopping an auto-started drive also pauses detection for a while,
@@ -356,6 +362,12 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     }
 
     private func accumulateDrive(_ fix: GPSFix) {
+        if !driveStarted {
+            guard driveGate.add(fix) else { return }
+            driveStarted = true
+            driveDistance = driveGate.distance
+            lastDriveFix = fix
+        }
         if fix.speed >= 0 { driveTopSpeed = max(driveTopSpeed, fix.speed * 3.6) }
         defer { lastDriveFix = fix }
         guard let prev = lastDriveFix else { return }
