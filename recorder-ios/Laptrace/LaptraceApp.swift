@@ -38,6 +38,9 @@ struct LaptraceApp: App {
 }
 
 enum Fmt {
+    /// One x-axis label for every along-the-lap chart.
+    static let distanceAxis = "Distance from line (m)"
+
     static func lap(_ s: Double?) -> String {
         guard let s, s.isFinite, s >= 0 else { return "–:–.–" }
         let m = Int(s) / 60

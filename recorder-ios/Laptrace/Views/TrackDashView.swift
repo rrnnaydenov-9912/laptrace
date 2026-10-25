@@ -15,7 +15,7 @@ struct TrackDashView: View {
                     VStack(spacing: 8) {
                         DeltaBar(seconds: rec.line.now?.deltaSeconds)
                         topBar
-                        LineMap(line: rec.line, hint: mapHint)
+                        LineMap(line: rec.line, hint: mapHint, showLegend: speedKmh < 20)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
                         cueRow
@@ -44,6 +44,8 @@ struct TrackDashView: View {
             .padding(10)
             .foregroundStyle(.white)
             .background(Color.black.ignoresSafeArea())
+            // Fixed full-screen layout: large accessibility text would truncate the labels, not help.
+            .dynamicTypeSize(...DynamicTypeSize.large)
         }
         .persistentSystemOverlays(.hidden)
         .onAppear {
@@ -68,53 +70,73 @@ struct TrackDashView: View {
 
     // MARK: Top: close, lap clock, reader, delta
 
+    /// Glove-sized: every control up here is at least 56 pt.
+    private static let glove: CGFloat = 56
+
     private var topBar: some View {
         HStack(alignment: .center, spacing: 10) {
-            Button { dismiss() } label: { Image(systemName: "xmark").font(.title3.bold()) }
-                .buttonStyle(.bordered).tint(.gray)
-                .accessibilityLabel("Close track screen")
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 22, weight: .bold))
+                    .frame(width: Self.glove, height: Self.glove)
+            }
+            .buttonStyle(.bordered).tint(.gray)
+            .accessibilityLabel("Close track screen")
             VStack(alignment: .leading, spacing: 0) {
-                Text(Fmt.lap(rec.currentLapElapsed)).font(.title.bold()).monospacedDigit()
+                Text(Fmt.lap(rec.currentLapElapsed)).font(.system(size: 34, weight: .bold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
                 if let p = rec.line.now?.predicted {
-                    Text("predicted \(Fmt.lap(p))").font(.caption.bold()).foregroundStyle(.cyan)
+                    Text("predicted \(Fmt.lap(p))").font(.system(size: 15, weight: .bold)).foregroundStyle(.cyan)
                 } else {
-                    Text("best \(Fmt.lap(rec.best?.duration))").font(.caption).foregroundStyle(.secondary)
+                    Text("best \(Fmt.lap(rec.best?.duration))").font(.system(size: 15)).foregroundStyle(.secondary)
                 }
             }
-            Spacer()
+            Spacer(minLength: 4)
             readerButton
+            delta
+        }
+    }
+
+    /// The number you glance for. The slot keeps its width when there is no delta yet, so nothing jumps.
+    private var delta: some View {
+        let big = Font.system(size: 48, weight: .heavy)
+        return VStack(alignment: .trailing, spacing: 0) {
             if let d = rec.line.now?.deltaSeconds {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(String(format: "%+.2f", d)).font(.title.bold()).monospacedDigit()
-                        .foregroundStyle(d <= 0 ? .green : .red)
-                    if let k = rec.line.now?.deltaKmh {
-                        Text(String(format: "%+.0f km/h vs best", k)).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
+                Text(Fmt.delta(d)).font(big).foregroundStyle(d <= 0 ? .green : .red)
+                Text((rec.line.now?.deltaKmh).map { String(format: "%+.0f km/h", $0) } ?? "s vs best")
+                    .font(.system(size: 15)).foregroundStyle(.secondary)
             } else if let d = rec.line.now?.deltaKmh {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(String(format: "%+.0f", d)).font(.title.bold()).monospacedDigit()
-                        .foregroundStyle(d >= 0 ? .green : .red)
-                    Text("km/h vs best").font(.caption).foregroundStyle(.secondary)
-                }
+                Text(String(format: "%+.0f", d)).font(big).foregroundStyle(d >= 0 ? .green : .red)
+                Text("km/h vs best").font(.system(size: 15)).foregroundStyle(.secondary)
             } else if let split = rec.lastSplit, let d = split.delta {
-                Text(Fmt.delta(d)).font(.title.bold()).monospacedDigit().foregroundStyle(d < 0 ? .green : .red)
+                Text(Fmt.delta(d)).font(big).foregroundStyle(d < 0 ? .green : .red)
+                Text(split.label).font(.system(size: 15)).foregroundStyle(.secondary)
+            } else {
+                Text("–").font(big).foregroundStyle(.secondary)
+                Text("vs best").font(.system(size: 15)).foregroundStyle(.secondary)
             }
         }
+        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+        .frame(minWidth: 120, alignment: .trailing)
     }
 
     @ViewBuilder private var cueRow: some View {
         if let cue = rec.line.cue {
             Text(cue)
-                .font(.title3.bold())
+                .font(.system(size: 22, weight: .bold))
                 .multilineTextAlignment(.center)
                 .lineLimit(2).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
                 .background(Color.orange.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+        } else if !obd.isLive, let p = obd.problem {
+            // Reader trouble gets the full row instead of a caption squeezed over the clock.
+            Label(p, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 17, weight: .semibold)).foregroundStyle(.orange)
+                .lineLimit(2).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
         } else {
             Text(rec.laps.isEmpty ? "Corner coaching starts after your first full lap." : " ")
-                .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                .font(.system(size: 17)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
         }
     }
 
@@ -157,7 +179,9 @@ struct TrackDashView: View {
 
     private func bar(_ label: String, value: Double, text: String, color: Color) -> some View {
         HStack(spacing: 10) {
-            Text(label).font(.title3.bold()).frame(width: 96, alignment: .leading)
+            Text(label).font(.system(size: 20, weight: .bold))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .frame(width: 96, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12))
@@ -198,21 +222,19 @@ struct TrackDashView: View {
 
     @ViewBuilder private var readerButton: some View {
         if obd.isLive {
-            Label(String(format: "%.0f Hz", obd.hz), systemImage: "car.side").font(.caption).foregroundStyle(.green)
+            Image(systemName: "car.side.fill").font(.system(size: 22)).foregroundStyle(.green)
+                .accessibilityLabel(String(format: "Car connected, %.0f Hz", obd.hz))
         } else {
             Button {
                 Task { await obd.autoConnect() }
             } label: {
-                Label(obd.running ? "Connecting…" : "Connect car", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.caption.bold())
+                Image(systemName: obd.running ? "ellipsis" : "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 22, weight: .bold))
+                    .frame(width: Self.glove, height: Self.glove)
             }
             .buttonStyle(.borderedProminent).tint(.orange)
             .disabled(obd.running)
-            .overlay(alignment: .top) {
-                if let p = obd.problem {
-                    Text(p).font(.caption2).foregroundStyle(.orange).fixedSize().offset(y: -18)
-                }
-            }
+            .accessibilityLabel(obd.running ? "Connecting to car" : "Connect car")
         }
     }
 }
@@ -221,6 +243,8 @@ struct TrackDashView: View {
 struct LineMap: View {
     let line: LiveLine
     var hint = "Your line appears here once you're moving."
+    /// The colour key is unreadable at speed, so the track screen shows it only when slow.
+    var showLegend = true
 
     var body: some View {
         Canvas { ctx, size in
@@ -279,10 +303,12 @@ struct LineMap: View {
             }
         }
         .overlay(alignment: .bottomLeading) {
-            HStack(spacing: 10) {
-                legend(.green, "throttle"); legend(.red, "brake"); legend(.yellow, "coast"); legend(.gray, "best"); legend(.cyan, "ghost")
+            if showLegend {
+                HStack(spacing: 10) {
+                    legend(.green, "throttle"); legend(.red, "brake"); legend(.yellow, "coast"); legend(.gray, "best"); legend(.cyan, "ghost")
+                }
+                .font(.caption2).padding(8)
             }
-            .font(.caption2).padding(8)
         }
         .accessibilityLabel("Track map with your current lap and best lap")
     }

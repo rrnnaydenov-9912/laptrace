@@ -89,12 +89,18 @@ struct SessionDetail: View {
 
     var body: some View {
         List {
+            // Review order: the verdict, then the laps to dig into, then the charts.
             if !meta.isDrive {
-                LapOverlaySections(meta: meta, track: track)
                 DebriefSections(meta: meta)
+                lapList
                 Section {
-                    NavigationLink("Detailed analysis") { SessionAnalysisView(meta: meta, track: track) }
+                    NavigationLink {
+                        SessionAnalysisView(meta: meta, track: track)
+                    } label: {
+                        Label("Sectors, corners and speed trace", systemImage: "chart.xyaxis.line")
+                    }
                 }
+                LapOverlaySections(meta: meta, track: track)
             } else {
                 DriveInsightsView(session: meta)
             }
@@ -122,20 +128,6 @@ struct SessionDetail: View {
                 LabeledContent("Duration", value: Fmt.duration(meta.duration))
                 LabeledContent("GPS fixes", value: "\(meta.fixCount)")
                 LabeledContent("IMU samples", value: "\(meta.motionCount)")
-            }
-            if !meta.isDrive && !meta.laps.isEmpty {
-                Section("Laps (live timing)") {
-                    ForEach(meta.laps) { lap in
-                        NavigationLink { LapOverlayView(meta: meta, track: track, focus: lap.number) } label: { HStack {
-                            Text("Lap \(lap.number)")
-                            Spacer()
-                            Text(Fmt.lap(lap.duration))
-                                .monospacedDigit()
-                                .fontWeight(lap.number == meta.best?.number ? .bold : .regular)
-                                .foregroundStyle(lap.number == meta.best?.number ? .green : .primary)
-                        } }
-                    }
-                }
             }
             Section {
                 if let exportURL {
@@ -182,6 +174,31 @@ struct SessionDetail: View {
             Text("Removes the GPS, IMU and OBD files and any exported CSV.")
         }
         .onDisappear { if !deleted { SessionStore.shared.save(meta) } }
+    }
+
+    @ViewBuilder private var lapList: some View {
+        if !meta.laps.isEmpty {
+            Section {
+                ForEach(meta.laps) { lap in
+                    let best = lap.number == meta.best?.number
+                    NavigationLink { LapOverlayView(meta: meta, track: track, focus: lap.number) } label: { HStack {
+                        Text("Lap \(lap.number)")
+                        Spacer()
+                        if !best, let b = meta.best?.duration {
+                            Text(Fmt.delta(lap.duration - b)).font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        Text(Fmt.lap(lap.duration))
+                            .monospacedDigit()
+                            .fontWeight(best ? .bold : .regular)
+                            .foregroundStyle(best ? .green : .primary)
+                    } }
+                }
+            } header: {
+                Text("Laps")
+            } footer: {
+                Text("Tap a lap to see it against your best.")
+            }
+        }
     }
 
     private func export() {
@@ -382,7 +399,8 @@ struct SessionAnalysisView: View {
                 corners(r)
                 trace(r)
             } else if loaded {
-                Text("Not enough GPS data for an analysis.").foregroundStyle(.secondary)
+                Text("Not enough GPS data for an analysis. It needs at least one complete lap, so pick a track or set the start/finish line before you drive.")
+                    .foregroundStyle(.secondary)
             } else {
                 HStack { ProgressView(); Text("Analysing laps…").foregroundStyle(.secondary) }
             }
@@ -423,6 +441,7 @@ struct SessionAnalysisView: View {
                         Text(sec.name).font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(String(format: "%.2f s", sec.best)).monospacedDigit().foregroundStyle(.green)
+                            .fontWeight(.semibold)
                         Text("L\(sec.bestLap)").font(.caption).foregroundStyle(.secondary)
                     }
                     Text(r.lapTimes.compactMap { l in
@@ -478,11 +497,11 @@ struct SessionAnalysisView: View {
                 }
             }
             Chart(points) { p in
-                LineMark(x: .value("Distance (m)", p.s), y: .value("km/h", p.kmh))
-                    .foregroundStyle(by: .value("Lap", p.lap == r.bestLap ? "Best (L\(p.lap))" : "L\(p.lap)"))
+                LineMark(x: .value("m", p.s), y: .value("km/h", p.kmh))
+                    .foregroundStyle(by: .value("Lap", p.lap == r.bestLap ? "L\(p.lap) best" : "L\(p.lap)"))
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
             }
-            .chartXAxisLabel("Distance from start line (m)")
+            .chartXAxisLabel(Fmt.distanceAxis)
             .chartYAxisLabel("km/h")
             .frame(height: 220)
         } header: {

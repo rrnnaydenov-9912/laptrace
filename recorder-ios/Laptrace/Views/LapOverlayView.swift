@@ -61,7 +61,7 @@ struct LapOverlaySections: View {
                 } footer: {
                     Text("Pinch to zoom, drag to pan, double-tap to reset. Best lap in green.")
                 }
-                Section("Time vs best (+ = slower)") { deltaChart }
+                Section("Gap to best lap (s, + = slower)") { deltaChart }
                 Section("Speed (km/h)") { speedChart }
             }
         }
@@ -169,8 +169,9 @@ struct LapOverlaySections: View {
                         if on { visible.remove(l.id) } else { visible.insert(l.id) }
                     } label: {
                         Text("\(label(l.id)) \(Fmt.lap(l.lap.duration))")
-                            .font(.caption.monospacedDigit())
-                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .font(.subheadline.monospacedDigit())
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
                             .background(on ? color(l.id).opacity(0.3) : Color.gray.opacity(0.15), in: Capsule())
                             .overlay(Capsule().stroke(on ? color(l.id) : .clear, lineWidth: 1.5))
                             .opacity(l.slow && !on ? 0.5 : 1)
@@ -183,7 +184,8 @@ struct LapOverlaySections: View {
     }
 
     private func chip(_ title: String, _ action: @escaping () -> Void) -> some View {
-        Button(title, action: action).font(.caption.bold()).buttonStyle(.bordered)
+        Button(action: action) { Text(title).frame(minHeight: 36) }
+            .font(.subheadline.bold()).buttonStyle(.bordered)
     }
 
     // MARK: - Charts
@@ -203,7 +205,7 @@ struct LapOverlaySections: View {
                 .lineStyle(StrokeStyle(lineWidth: 1.5))
         }
         .chartForegroundStyleScale(domain: domain.names, range: domain.colors)
-        .chartXAxisLabel("metres from the line")
+        .chartXAxisLabel(Fmt.distanceAxis)
         .frame(height: 220)
     }
 
@@ -231,7 +233,7 @@ struct LapOverlaySections: View {
                         .lineStyle(StrokeStyle(lineWidth: 1.5))
                 }
                 .chartForegroundStyleScale(domain: domain.names, range: domain.colors)
-                .chartXAxisLabel("metres from the line")
+                .chartXAxisLabel(Fmt.distanceAxis)
                 .frame(height: 200)
             }
         }

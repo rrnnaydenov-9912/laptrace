@@ -234,37 +234,38 @@ struct RecordView: View {
                     rec.markVideoStart()
                     videoMarked = true
                 } label: {
-                    Label(videoMarked ? "Video start marked – tap again to re-mark" : "Mark video start",
+                    Label(videoMarked ? "Video start marked · tap to re-mark" : "Mark video start",
                           systemImage: videoMarked ? "checkmark.circle" : "video")
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.bordered)
             }
 
             if !isDrive {
-            Button { showDash = true } label: {
-                Label("Track screen", systemImage: "gauge.with.dots.needle.67percent")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.indigo)
+                Button { showDash = true } label: {
+                    Label("Track screen", systemImage: "gauge.with.dots.needle.67percent")
+                        .font(.title3.bold())
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.indigo)
 
-            Button { showAccel = true } label: {
-                Label("Acceleration timer", systemImage: "stopwatch")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-                sfMessage = rec.setStartFinishHere()
-                    ? "Start/finish line set here. Laps count from your next crossing."
-                    : "Drive over the line at more than ~10 km/h to set it, so the direction is known."
-            } label: {
-                Label("Set start/finish here", systemImage: "mappin.and.ellipse")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+                HStack(spacing: 12) {
+                    Button { showAccel = true } label: {
+                        Label("Accel timer", systemImage: "stopwatch")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    Button {
+                        sfMessage = rec.setStartFinishHere()
+                            ? "Start/finish line set here. Laps count from your next crossing."
+                            : "Drive over the line at more than ~10 km/h to set it, so the direction is known."
+                    } label: {
+                        Label("Set start/finish", systemImage: "mappin.and.ellipse")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
     }

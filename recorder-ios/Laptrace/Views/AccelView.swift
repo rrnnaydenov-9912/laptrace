@@ -39,13 +39,21 @@ struct AccelView: View {
     }
 
     private var header: some View {
+        // Clear on the left, close on the right: far apart so a gloved tap can't hit the wrong one.
         HStack {
+            Button { rec.accel = AccelMeter() } label: {
+                Label("Clear", systemImage: "trash").frame(minHeight: 44)
+            }
+            .buttonStyle(.bordered).tint(.gray)
+            .disabled(meter.runs.isEmpty)
+            Spacer()
             Text("Acceleration timer").font(.headline)
             Spacer()
-            Button("Clear") { rec.accel = AccelMeter() }
-                .disabled(meter.runs.isEmpty)
-            Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").font(.title2) }
-                .accessibilityLabel("Close")
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.title3.bold()).frame(width: 44, height: 44)
+            }
+            .buttonStyle(.bordered).tint(.gray)
+            .accessibilityLabel("Close")
         }
     }
 
