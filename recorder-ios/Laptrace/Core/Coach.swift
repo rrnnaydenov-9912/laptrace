@@ -215,7 +215,11 @@ enum Coach {
         }
     }
 
-    struct Measure: Equatable { var entry: Double; var min: Double; var minAt: Double; var exit: Double; var brake: Double?; var time: Double }
+    struct Measure: Equatable {
+        var entry: Double; var min: Double; var minAt: Double; var exit: Double; var brake: Double?; var time: Double
+        /// Where speed starts rising again after the minimum (throttle pick-up), metres.
+        var throttle: Double? = nil
+    }
 
     static func measure(_ g: Grid, corner c: Corner, zone: (Double, Double)) -> Measure {
         let lo = index(g, at: c.start - 20), hi = index(g, at: c.end + 10)
@@ -225,8 +229,10 @@ enum Coach {
         var p = min(z0, m)
         for i in min(z0, m)...m where g.v[i] >= g.v[p] { p = i }   // last peak = where braking starts
         let brake = (g.v[p] - g.v[m]) * 3.6 > 5 ? g.s[p] : nil
+        let z1 = index(g, at: zone.1)
+        let pickUp = (m...max(m, z1)).first { g.v[$0] > g.v[m] + 2 / 3.6 }.map { g.s[$0] }   // +2 km/h, as studio-web
         return Measure(entry: g.v[index(g, at: c.start)], min: g.v[m], minAt: g.s[m], exit: g.v[index(g, at: c.end)],
-                       brake: brake, time: time(g, at: zone.1) - time(g, at: zone.0))
+                       brake: brake, time: time(g, at: zone.1) - time(g, at: zone.0), throttle: pickUp)
     }
 
     static func average(_ ms: [Measure]) -> Measure? {
@@ -307,5 +313,185 @@ enum Coach {
         guard v.count >= 2 else { return 0 }
         let mean = v.reduce(0, +) / Double(v.count)
         return sqrt(v.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(v.count - 1))
+    }
+}
+
+// MARK: - Opportunities (studio-web insights.ts)
+
+extension Coach {
+    enum Cause { case braking, minSpeed, throttle, exit, unclear }
+
+    /// What the reference lap could gain in one corner by matching the lap that was quickest through it.
+    struct Opportunity: Identifiable {
+        var corner: Int
+        var gain: Double            // s
+        var fromLap: Int
+        var cause: Cause
+        var refValue: Double?       // metres for braking/throttle, km/h for speeds
+        var fastValue: Double?
+        var id: Int { corner }
+    }
+
+    /// Main reason `slow` lost time to `fast`. 10 m of brake/throttle point weighs as much as 2 km/h of speed.
+    static func cause(slow: Measure, fast: Measure) -> (Cause, Double?, Double?) {
+        var cands: [(Cause, Double, Double, Double)] = []
+        if let s = slow.brake, let f = fast.brake, f - s >= 5 { cands.append((.braking, (f - s) / 10, s, f)) }
+        let dMin = (fast.min - slow.min) * 3.6
+        if dMin >= 2 { cands.append((.minSpeed, dMin / 2, slow.min * 3.6, fast.min * 3.6)) }
+        if let s = slow.throttle, let f = fast.throttle, s - f >= 5 { cands.append((.throttle, (s - f) / 10, s, f)) }
+        let dExit = (fast.exit - slow.exit) * 3.6
+        if dExit >= 2 { cands.append((.exit, dExit / 2 * 0.8, slow.exit * 3.6, fast.exit * 3.6)) }
+        guard let top = cands.max(by: { $0.1 < $1.1 }) else { return (.unclear, nil, nil) }
+        return (top.0, top.2, top.3)
+    }
+
+    /// Per corner, the quickest other lap through the corner zone against the reference lap. Biggest gain first.
+    static func opportunities(refLap: Int, corners: [(number: Int, laps: [Int: Measure])], minGain: Double = 0.05) -> [Opportunity] {
+        corners.compactMap { c in
+            guard let r = c.laps[refLap],
+                  let fast = c.laps.filter({ $0.key != refLap }).min(by: { $0.value.time < $1.value.time }) else { return nil }
+            let gain = r.time - fast.value.time
+            guard gain >= minGain else { return nil }
+            let why = cause(slow: r, fast: fast.value)
+            return Opportunity(corner: c.number, gain: gain, fromLap: fast.key, cause: why.0, refValue: why.1, fastValue: why.2)
+        }
+        .sorted { $0.gain > $1.gain }
+    }
+}
+
+// MARK: - Car data (studio-web car.ts)
+
+/// Revs at the shift, time flat out, time with neither pedal, engine temperatures, and how lap
+/// time moved as the engine heated up over the stint. Read-only service 01 data only.
+enum CarAnalysis {
+    static let throttleOn = 5.0
+    static let fullThrottle = 90.0
+    static let limits = (coolant: 105.0, oil: 130.0, intake: 55.0)
+
+    struct LapStats {
+        var number: Int
+        var time: Double
+        var maxRpm: Double?
+        var shiftRpm: Double?       // median of detected upshifts
+        var shifts: Int
+        var fullThrottlePct: Double?
+        var coastSeconds: Double?
+        var coolantMax: Double?
+        var oilMax: Double?
+        var intakeMax: Double?
+        var hasCarData: Bool { maxRpm != nil || fullThrottlePct != nil || coolantMax != nil || oilMax != nil }
+    }
+
+    struct Advice: Hashable { var text: String; var warn: Bool }
+
+    struct Stint {
+        var rows: [LapStats]
+        var secPer10C: Double?      // least-squares slope of lap time against the hottest temperature
+        var channel: String?        // "oil" or "coolant"
+        var verdict: String? {
+            guard let s = secPer10C, let name = channel else { return nil }
+            if abs(s) < 0.1 { return "Lap times held steady as the \(name) warmed up." }
+            return s > 0
+                ? String(format: "Laps got about %.2f s slower for every 10 °C of %@. Heat may be costing power or grip; try a cool-down lap mid-stint.", s, name)
+                : String(format: "Laps got about %.2f s quicker for every 10 °C of %@, so the car and tyres were still coming in.", -s, name)
+        }
+    }
+
+    /// Upshifts: a revs peak followed within a second by a drop of more than 1000 rpm while the car keeps its speed.
+    static func shifts(_ l: Exporter.LapChannels) -> [Double] {
+        var out: [Double] = []
+        var i = 1
+        while i < l.rpm.count - 1 {
+            guard let r = l.rpm[i], r >= 2500, (l.rpm[i - 1].map { r >= $0 } ?? true) else { i += 1; continue }
+            var shifted = -1
+            var j = i + 1
+            while j < l.rpm.count && l.t[j] - l.t[i] <= 1 {
+                if let rj = l.rpm[j] {
+                    if rj > r { break }
+                    if r - rj > 1000 && l.speed[j] >= l.speed[i] - 3 / 3.6 { shifted = j; break }
+                }
+                j += 1
+            }
+            if shifted > 0 { out.append(r); i = shifted + 1 } else { i += 1 }
+        }
+        return out
+    }
+
+    static func stats(_ l: Exporter.LapChannels) -> LapStats {
+        var full = 0.0, coast = 0.0, known = 0.0
+        for i in 1..<max(l.t.count, 1) {
+            let dt = l.t[i] - l.t[i - 1]
+            guard dt > 0, dt < 2, let p = l.pedal[i] else { continue }
+            known += dt
+            if p >= fullThrottle { full += dt } else if p <= throttleOn && l.long[i] > -0.15 { coast += dt }
+        }
+        let enough = known > l.duration * 0.5
+        let sh = shifts(l)
+        return LapStats(number: l.number, time: l.duration, maxRpm: l.rpm.compactMap { $0 }.max(),
+                        shiftRpm: Coach.median(sh), shifts: sh.count,
+                        fullThrottlePct: enough ? full / known * 100 : nil,
+                        coastSeconds: enough ? coast * (l.duration / known) : nil,
+                        coolantMax: l.coolant.compactMap { $0 }.max(), oilMax: l.oil.compactMap { $0 }.max(),
+                        intakeMax: l.intake.compactMap { $0 }.max())
+    }
+
+    /// Plain guidance from the best lap against the others.
+    static func advice(ref: LapStats, laps: [LapStats]) -> [Advice] {
+        let others = laps.filter { $0.number != ref.number }
+        let all = laps + [ref]
+        var out: [Advice] = []
+        func r100(_ v: Double) -> Int { Int((v / 100).rounded()) * 100 }
+
+        let sessionMax = all.compactMap(\.maxRpm).max()
+        if let shift = ref.shiftRpm ?? Coach.median(laps.compactMap(\.shiftRpm)), let top = sessionMax {
+            out.append(Advice(text: top - shift > 700
+                ? "You usually change up at about \(r100(shift)) rpm but the engine reached \(r100(top)) rpm this session. On the straights, hold each gear a little longer before changing up."
+                : "Your upshifts sit around \(r100(shift)) rpm, close to the highest revs you used. Keep them there.", warn: false))
+        }
+        let typFull = Coach.median(others.compactMap(\.fullThrottlePct))
+        if let f = ref.fullThrottlePct {
+            if let t = typFull, f - t >= 3 {
+                out.append(Advice(text: "Your best lap was flat out \(Int(f.rounded()))% of the time, against \(Int(t.rounded()))% on a typical lap. Commit to full throttle sooner on corner exits.", warn: false))
+            } else {
+                out.append(Advice(text: "Flat out for \(Int(f.rounded()))% of your best lap.", warn: false))
+            }
+        }
+        if let c = Coach.median(others.compactMap(\.coastSeconds)) ?? ref.coastSeconds, c >= 1.5 {
+            out.append(Advice(text: String(format: "About %.1f s per lap with neither pedal pressed. Aim to go straight from the brake to a little throttle through the corner.", c), warn: false))
+        }
+        let oil = all.compactMap(\.oilMax).max(), coolant = all.compactMap(\.coolantMax).max(), intake = all.compactMap(\.intakeMax).max()
+        var temps = false
+        if let o = oil, o >= limits.oil {
+            out.append(Advice(text: "Oil reached \(Int(o.rounded())) °C. Do a slow cool-down lap before it climbs further, and check the oil level after the session.", warn: true)); temps = true
+        }
+        if let c = coolant, c >= limits.coolant {
+            out.append(Advice(text: "Coolant reached \(Int(c.rounded())) °C. Back off for a lap and let it settle.", warn: true)); temps = true
+        }
+        if let i = intake, i >= limits.intake {
+            out.append(Advice(text: "Intake air reached \(Int(i.rounded())) °C. Hot intake air costs power, so expect slower straights later in a stint.", warn: false)); temps = true
+        }
+        if !temps && (oil != nil || coolant != nil) {
+            let parts = [coolant.map { "coolant \(Int($0.rounded())) °C" }, oil.map { "oil \(Int($0.rounded())) °C" }].compactMap { $0 }
+            out.append(Advice(text: "Temperatures stayed in range: \(parts.joined(separator: ", ")) at most.", warn: false))
+        }
+        return out
+    }
+
+    /// Lap time against the hottest oil (else coolant) of each lap, in driving order.
+    static func stint(_ laps: [LapStats]) -> Stint? {
+        let rows = laps.sorted { $0.number < $1.number }
+        guard rows.count >= 2, rows.contains(where: { $0.oilMax != nil || $0.coolantMax != nil }) else { return nil }
+        func fit(_ pick: (LapStats) -> Double?) -> Double? {
+            let pts = rows.compactMap { r in pick(r).map { ($0, r.time) } }
+            guard pts.count >= 4, let lo = pts.map(\.0).min(), let hi = pts.map(\.0).max(), hi - lo >= 5 else { return nil }
+            let n = Double(pts.count)
+            let mx = pts.map(\.0).reduce(0, +) / n, my = pts.map(\.1).reduce(0, +) / n
+            let sxx = pts.reduce(0) { $0 + ($1.0 - mx) * ($1.0 - mx) }
+            guard sxx > 0 else { return nil }
+            return pts.reduce(0) { $0 + ($1.0 - mx) * ($1.1 - my) } / sxx * 10
+        }
+        if let s = fit(\.oilMax) { return Stint(rows: rows, secPer10C: s, channel: "oil") }
+        let c = fit(\.coolantMax)
+        return Stint(rows: rows, secPer10C: c, channel: c == nil ? nil : "coolant")
     }
 }

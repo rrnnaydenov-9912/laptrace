@@ -117,6 +117,11 @@ struct Exporter {
         var long: [Double]     // g, + = accelerating
         var lat: [Double]      // g, + = turning right
         var pedal: [Double?]   // %, accelerator pedal, else throttle plate; nil without car data
+        var t: [Double] = []
+        var rpm: [Double?] = []
+        var coolant: [Double?] = []
+        var oil: [Double?] = []
+        var intake: [Double?] = []
     }
 
     /// Laps with g-forces (phone IMU when it calibrates, else GPS) and the car's pedal.
@@ -128,8 +133,10 @@ struct Exporter {
         let cal = applyGForces(&rows, fixes: fixes, motion: motion)
         let laps = labelLaps(&rows, track: track)
         let columns = applyOBD(&rows, obd)
-        let pedalCol = columns.firstIndex { $0.header == "Pedal (%)" }
-        let throttleCol = columns.firstIndex { $0.header == "Throttle (%)" }
+        func col(_ header: String) -> Int? { columns.firstIndex { $0.header == header } }
+        let pedalCol = col("Pedal (%)"), throttleCol = col("Throttle (%)")
+        let rpmCol = col("RPM"), coolantCol = col("Coolant (°C)"), oilCol = col("Oil (°C)"), intakeCol = col("Intake (°C)")
+        func values(_ r: [Row], _ c: Int?) -> [Double?] { r.map { row in c.flatMap { row.obd[$0] } } }
         let groups = Dictionary(grouping: rows.filter { $0.lap > 0 }, by: \.lap)
         let out = groups.keys.sorted().compactMap { n -> LapChannels? in
             guard let r = groups[n], r.count >= 2 else { return nil }
@@ -139,7 +146,9 @@ struct Exporter {
             let pedal = r.map { row in (pedalCol.flatMap { row.obd[$0] }) ?? throttleCol.flatMap { row.obd[$0] } }
             let duration = n <= laps.count ? laps[n - 1].duration : r.last!.t - r.first!.t
             return LapChannels(number: n, duration: duration, s: s, speed: r.map(\.speed),
-                               long: r.map(\.long), lat: r.map(\.lat), pedal: pedal)
+                               long: r.map(\.long), lat: r.map(\.lat), pedal: pedal, t: r.map(\.t),
+                               rpm: values(r, rpmCol), coolant: values(r, coolantCol), oil: values(r, oilCol),
+                               intake: values(r, intakeCol))
         }
         return (out, cal.calibrated)
     }

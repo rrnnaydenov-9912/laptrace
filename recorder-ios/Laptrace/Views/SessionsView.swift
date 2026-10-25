@@ -254,7 +254,9 @@ enum SessionAnalysis {
         var corners: [Coach.CornerStats]
         /// Lap the corner table is measured against (fastest GPS lap; can differ from `bestLap` with split gates).
         var cornerRefLap: Int
+        var cornerRefTime: Double
         var cornerTable: [CornerRow]
+        var opportunities: [Coach.Opportunity]
         var traces: [Int: [TracePoint]]
         var tips: [String]
     }
@@ -333,7 +335,9 @@ enum SessionAnalysis {
 
         return Result(lapTimes: lapTimes.sorted { $0.number < $1.number }, bestLap: bestLap, bestTime: bestTime,
                       potential: potential, sectors: secs, sectorSource: source, corners: corners,
-                      cornerRefLap: best.number, cornerTable: cornerTable, traces: traces, tips: tips)
+                      cornerRefLap: best.number, cornerRefTime: best.duration, cornerTable: cornerTable,
+                      opportunities: Coach.opportunities(refLap: best.number, corners: cornerTable.map { ($0.number, $0.laps) }),
+                      traces: traces, tips: tips)
     }
 
     /// Sectors from the recorder's split gates, if the track has them and enough laps crossed all of them.
@@ -503,6 +507,7 @@ struct SessionImproveSections: View {
         Group {
             if let r = result {
                 potential(r)
+                opportunities(r)
                 corners(r)
             } else if !loaded {
                 Section("Potential best") {
@@ -553,6 +558,58 @@ struct SessionImproveSections: View {
             Text("Potential best")
         } footer: {
             Text("Your fastest time in each sector (\(r.sectorSource.lowercased())) added up. Rows below the total are sectors where another lap beat your best lap.")
+        }
+    }
+
+    // MARK: Opportunities
+
+    /// Per corner, the lap that was quickest through it and why (studio-web OpportunitiesPanel).
+    @ViewBuilder private func opportunities(_ r: SessionAnalysis.Result) -> some View {
+        if !r.opportunities.isEmpty {
+            let top = r.opportunities.prefix(3)
+            let gain = top.reduce(0) { $0 + $1.gain }
+            Section {
+                LabeledContent("Realistic target") {
+                    Text(Fmt.lap(r.cornerRefTime - gain)).monospacedDigit().fontWeight(.bold).foregroundStyle(.green)
+                }
+                ForEach(r.opportunities.prefix(6)) { o in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("T\(o.corner)").fontWeight(.semibold)
+                            Text(Self.causeTitle(o.cause)).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(String(format: "−%.2f s", o.gain)).monospacedDigit().foregroundStyle(.green)
+                        }
+                        Text(Self.causeText(o)).font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Where the time is")
+            } footer: {
+                Text("Each corner against your best lap \(r.cornerRefLap): the lap that was quickest through it and what it did differently. The target is your best lap plus the top \(top.count) corners, all of which you have already driven.")
+            }
+        }
+    }
+
+    private static func causeTitle(_ c: Coach.Cause) -> String {
+        switch c {
+        case .braking: "braking point"
+        case .minSpeed: "corner speed"
+        case .throttle: "throttle pick-up"
+        case .exit: "exit speed"
+        case .unclear: "time through the corner"
+        }
+    }
+
+    private static func causeText(_ o: Coach.Opportunity) -> String {
+        let lap = "Lap \(o.fromLap)"
+        guard let a = o.refValue, let b = o.fastValue else { return "\(lap) was quicker through it." }
+        switch o.cause {
+        case .braking: return "\(lap) braked \(Int((b - a).rounded())) m later."
+        case .minSpeed: return "\(lap) kept \(Int(b.rounded())) km/h at the slowest point, against \(Int(a.rounded()))."
+        case .throttle: return "\(lap) was back on the power \(Int((a - b).rounded())) m sooner."
+        case .exit: return "\(lap) left the corner at \(Int(b.rounded())) km/h, against \(Int(a.rounded()))."
+        case .unclear: return "\(lap) was quicker through it."
         }
     }
 

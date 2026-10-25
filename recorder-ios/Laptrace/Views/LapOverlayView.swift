@@ -261,6 +261,7 @@ struct TelemetrySections: View {
     @State private var best: Int?
     @State private var compare: Int?
     @State private var ggLap: Int?
+    @State private var car: [CarAnalysis.LapStats] = []   // timed laps with car data
     @State private var loaded = false
 
     var body: some View {
@@ -291,6 +292,7 @@ struct TelemetrySections: View {
                     Text("Same distance on every chart. Look for where the orange line brakes earlier, carries less speed or opens the throttle later than the green.")
                 }
                 gg(b, c)
+                carSections(best: b.number)
             }
         }
         .task(id: meta.id) {
@@ -309,6 +311,8 @@ struct TelemetrySections: View {
             best = timed.first?.number
             compare = timed.dropFirst().first?.number
             ggLap = best
+            let stats = timed.map(CarAnalysis.stats)
+            car = stats.contains(where: \.hasCarData) ? stats : []
             loaded = true
         }
     }
@@ -369,6 +373,65 @@ struct TelemetrySections: View {
         } footer: {
             Text("Each dot is a moment of the lap: up = accelerating, down = braking, sideways = cornering; colour = speed (blue slow, red fast). A fuller circle means you use more of the grip while braking into and powering out of corners. G from \(imu ? "the phone's motion sensor" : "GPS speed and heading").")
         }
+    }
+
+    // MARK: Car and stint (studio-web CarPanel, StintChart)
+
+    @ViewBuilder private func carSections(best: Int) -> some View {
+        if let ref = car.first(where: { $0.number == best }) {
+            Section {
+                HStack {
+                    figure(ref.shiftRpm.map { String(format: "%.0f", $0) } ?? "–", "Shift rpm")
+                    figure(ref.fullThrottlePct.map { String(format: "%.0f%%", $0) } ?? "–", "Flat out")
+                    figure(ref.coastSeconds.map { String(format: "%.1f s", $0) } ?? "–", "Coasting")
+                }
+                ForEach(CarAnalysis.advice(ref: ref, laps: car), id: \.self) { a in
+                    Label(a.text, systemImage: a.warn ? "exclamationmark.triangle.fill" : "lightbulb")
+                        .foregroundStyle(a.warn ? .red : .primary)
+                        .font(.callout)
+                }
+            } header: {
+                Text("Car · best lap \(best)")
+            } footer: {
+                Text("From the OBD reader. Shift rpm is the typical revs at an upshift; coasting is time with neither pedal pressed.")
+            }
+            if let s = CarAnalysis.stint(car) {
+                Section {
+                    Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 6) {
+                        GridRow {
+                            Text("Lap").gridColumnAlignment(.leading)
+                            Text("Time"); Text("Oil"); Text("Coolant")
+                        }
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(s.rows, id: \.number) { r in
+                            GridRow {
+                                Text("L\(r.number)").fontWeight(r.number == best ? .bold : .regular)
+                                Text(Fmt.lap(r.time)).foregroundStyle(r.number == best ? .green : .primary)
+                                Text(r.oilMax.map { String(format: "%.0f°", $0) } ?? "–")
+                                    .foregroundStyle((r.oilMax ?? 0) >= CarAnalysis.limits.oil ? .red : .primary)
+                                Text(r.coolantMax.map { String(format: "%.0f°", $0) } ?? "–")
+                                    .foregroundStyle((r.coolantMax ?? 0) >= CarAnalysis.limits.coolant ? .red : .primary)
+                            }
+                            .font(.callout.monospacedDigit())
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    if let v = s.verdict { Text(v).font(.callout) }
+                } header: {
+                    Text("Stint")
+                } footer: {
+                    Text("Lap time against the hottest oil and coolant of each lap, in the order you drove them.")
+                }
+            }
+        }
+    }
+
+    private func figure(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.headline.monospacedDigit())
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func peak(_ label: String, _ g: Double?) -> some View {
