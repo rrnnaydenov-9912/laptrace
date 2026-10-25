@@ -17,6 +17,11 @@ final class OBDLive {
     private(set) var lastUpdate: Date?
     private(set) var problem: String?
     private(set) var readerName: String?
+    /// PIDs the car says it publishes (from 0100/0120/0140). Nil until known.
+    private(set) var supported: Set<UInt8>?
+
+    /// True unless the car has said it doesn't publish this PID.
+    func reports(_ pid: UInt8) -> Bool { supported?.contains(pid) ?? true }
 
     /// Fresh enough to show as live numbers.
     var isLive: Bool { running && (lastUpdate.map { Date().timeIntervalSince($0) < 2 } ?? false) }
@@ -75,6 +80,7 @@ final class OBDLive {
         problem = nil
         readerName = link.deviceName
         values = [:]
+        supported = nil
         fastMode = .multiCounted
         slowCombined = true
         loop = Task { [weak self] in await self?.run() }
@@ -90,11 +96,18 @@ final class OBDLive {
     private func run() async {
         for c in ["ATE0", "ATL0", "ATS0", "ATH0", "ATCAF1"] { _ = try? await link.send(c) }
         // First query wakes the car link; it can take several seconds while the protocol is found.
-        if (try? await link.send("0100", timeout: 15)) == nil {
+        guard let first = try? await link.send("0100", timeout: 15) else {
             problem = "The car didn't answer. Start the engine and try again."
             running = false
             return
         }
+        var pids = OBDDecode.supported(first, base: 0x00)
+        for base: UInt8 in [0x20, 0x40] where pids.contains(base) {
+            if let more = try? await link.send(String(format: "01%02X", base), timeout: 1.5) {
+                pids.formUnion(OBDDecode.supported(more, base: base))
+            }
+        }
+        supported = pids.isEmpty ? nil : pids
         var lastSlow = Date.distantPast
         var failures = 0
         var stamps: [Date] = []
@@ -143,27 +156,35 @@ final class OBDLive {
 
     /// Several PIDs per request is far faster on CAN. The trailing count tells the reader how many
     /// answers to wait for; some clones don't understand it, so fall back step by step.
+    /// The list minus PIDs the car doesn't publish (all of it if that would leave nothing).
+    private func wanted(_ list: [UInt8]) -> [UInt8] {
+        let f = list.filter(reports)
+        return f.isEmpty ? list : f
+    }
+
     private func pollFast() async throws -> [UInt8: Double] {
+        let fast = wanted(Self.fastPIDs)
         switch fastMode {
         case .multiCounted, .multi:
-            let cmd = Self.command(Self.fastPIDs) + (fastMode == .multiCounted ? "1" : "")
+            let cmd = Self.command(fast) + (fastMode == .multiCounted ? "1" : "")
             let got = decode(try await link.send(cmd, timeout: 1.5))
             if got.count < 2 { fastMode = fastMode == .multiCounted ? .multi : .single }
             return got
         case .single:
-            let pid = Self.fastPIDs[singleIndex % 2 == 0 ? 0 : 1 + (singleIndex / 2) % (Self.fastPIDs.count - 1)]
+            let pid = fast.count == 1 ? fast[0] : fast[singleIndex % 2 == 0 ? 0 : 1 + (singleIndex / 2) % (fast.count - 1)]
             singleIndex += 1
             return decode(try await link.send(Self.command([pid]), timeout: 1.5))
         }
     }
 
     private func pollSlow() async throws -> [UInt8: Double] {
+        let slow = wanted(Self.slowPIDs)
         if slowCombined {
-            let got = decode(try await link.send(Self.command(Self.slowPIDs), timeout: 1.5))
+            let got = decode(try await link.send(Self.command(slow), timeout: 1.5))
             if got.isEmpty { slowCombined = false }
             return got
         }
-        let pid = Self.slowPIDs[slowIndex % Self.slowPIDs.count]
+        let pid = slow[slowIndex % slow.count]
         slowIndex += 1
         return decode((try? await link.send(Self.command([pid]), timeout: 1.5)) ?? [])
     }

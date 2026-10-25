@@ -32,9 +32,9 @@ struct TrackDashView: View {
                         .frame(maxHeight: .infinity)
                         pedals
                         HStack(spacing: 8) {
-                            temp("Coolant", obd.values[0x05], warn: 105, cold: 70)
-                            temp("Oil", obd.values[0x5C], warn: 130, cold: 80)
-                            temp("Intake", obd.values[0x0F], warn: 55, cold: nil)
+                            temp("Coolant", obd.values[0x05], warn: 105, cold: 70, reported: obd.reports(0x05))
+                            temp("Oil", obd.values[0x5C], warn: 130, cold: 80, reported: obd.reports(0x5C))
+                            temp("Intake", obd.values[0x0F], warn: 55, cold: nil, reported: obd.reports(0x0F))
                         }
                         .frame(maxHeight: .infinity)
                     }
@@ -46,8 +46,17 @@ struct TrackDashView: View {
             .background(Color.black.ignoresSafeArea())
         }
         .persistentSystemOverlays(.hidden)
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            DriveDetection.shared.trackScreenOpen = true
+            // Keeps GPS (and the app) alive if the screen locks or another app comes forward.
+            rec.startPreview(background: true)
+        }
+        .onDisappear {
+            DriveDetection.shared.trackScreenOpen = false
+            rec.stopPreviewIfIdle()
+            UIApplication.shared.isIdleTimerDisabled = rec.state == .recording
+        }
     }
 
     /// What the empty map says, so a dark panel is never a mystery.
@@ -161,7 +170,8 @@ struct TrackDashView: View {
 
     // MARK: Temperatures and reader status
 
-    private func temp(_ label: String, _ v: Double?, warn: Double, cold: Double?) -> some View {
+    /// `reported` is false when the car says it doesn't publish this PID (many cars don't send oil temperature on standard OBD).
+    private func temp(_ label: String, _ v: Double?, warn: Double, cold: Double?, reported: Bool = true) -> some View {
         let color: Color = {
             guard let v else { return .secondary }
             if v >= warn { return .red }
@@ -169,11 +179,14 @@ struct TrackDashView: View {
             return .white
         }()
         return VStack(spacing: 0) {
-            Text(v.map { String(format: "%.0f°", $0) } ?? "–")
-                .font(.system(size: 64, weight: .heavy)).monospacedDigit()
+            Text(v.map { String(format: "%.0f°", $0) } ?? (reported ? "–" : "n/a"))
+                .font(.system(size: reported || v != nil ? 64 : 34, weight: .heavy)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.3)
                 .foregroundStyle(color)
             Text(label).font(.headline).foregroundStyle(.secondary)
+            if !reported && v == nil {
+                Text("Car doesn't report it").font(.caption2).foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background((v.map { $0 >= warn } ?? false ? Color.red.opacity(0.25) : Color.white.opacity(0.06)),

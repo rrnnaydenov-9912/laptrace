@@ -61,6 +61,10 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     @ObservationIgnored private var motionCountAtTick = 0
     @ObservationIgnored private var tick: Timer?
     private var manualTrack = false
+    /// A screen is showing live GPS. Keeps location on (in the background too) until it closes.
+    @ObservationIgnored private var previewing = false
+    /// Tells iOS a recording is in progress, so a backgrounded app keeps running instead of being suspended.
+    @ObservationIgnored private var bgActivity: CLBackgroundActivitySession?
 
     override init() {
         super.init()
@@ -79,14 +83,23 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     func requestPermission() { location.requestWhenInUseAuthorization() }
 
     /// GPS on without recording, so the driver sees accuracy and the track before starting.
-    func startPreview() {
+    /// `background` keeps fixes coming when the screen locks or the app goes to the background (track screen).
+    func startPreview(background: Bool = false) {
         if authorization == .notDetermined { requestPermission() }
+        previewing = true
+        if background {
+            location.allowsBackgroundLocationUpdates = true
+            location.showsBackgroundLocationIndicator = true
+        }
         location.startUpdatingLocation()
     }
 
     /// Leaves GPS running while recording or while drive detection is checking a possible drive.
     func stopPreviewIfIdle() {
-        if state == .idle && !keepGPSOn && accel == nil { location.stopUpdatingLocation() }
+        previewing = false
+        guard state == .idle && !keepGPSOn && accel == nil else { return }
+        location.allowsBackgroundLocationUpdates = false
+        location.stopUpdatingLocation()
     }
 
     @ObservationIgnored var keepGPSOn = false
@@ -98,7 +111,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     }
 
     func stopBackgroundGPSIfIdle() {
-        guard state == .idle else { return }
+        guard state == .idle, !previewing else { return }
         location.allowsBackgroundLocationUpdates = false
         location.stopUpdatingLocation()
     }
@@ -130,6 +143,11 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
     // MARK: - Recording
 
     func start(mode: Mode? = nil, auto: Bool = false) {
+        // Starting a track session by hand replaces a drive that detection started on its own.
+        if !auto, mode == .track, state == .recording, autoStarted {
+            DriveDetection.shared.userStoppedAutoDrive()
+            stop(discardShorterThan: .infinity)
+        }
         guard state == .idle else { return }
         if let mode { self.mode = mode }
         autoStarted = auto
@@ -152,6 +170,7 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         location.allowsBackgroundLocationUpdates = true
         location.showsBackgroundLocationIndicator = true
         location.startUpdatingLocation()
+        bgActivity = CLBackgroundActivitySession()
         startMotion()
         UIApplication.shared.isIdleTimerDisabled = true
         state = .recording
@@ -171,7 +190,8 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         gpsWriter = nil; motionWriter = nil
         obdWriter?.close(); obdWriter = nil
         keepGPSOn = false
-        location.allowsBackgroundLocationUpdates = false
+        bgActivity?.invalidate(); bgActivity = nil
+        if !previewing { location.allowsBackgroundLocationUpdates = false }
         UIApplication.shared.isIdleTimerDisabled = false
         meta.ended = Date()
         meta.fixCount = fixCount
@@ -198,6 +218,15 @@ final class Recorder: NSObject, CLLocationManagerDelegate {
         // The debrief is about laps; drives (manual or automatic) don't get one.
         if !wasAuto && !meta.isDrive { lastStopped = meta }
         return meta
+    }
+
+    /// Stop pressed by the driver. Stopping an auto-started drive also pauses detection for a while,
+    /// so it doesn't start another one straight away.
+    @discardableResult
+    func stopFromUser() -> SessionMeta? {
+        guard autoStarted else { return stop() }
+        DriveDetection.shared.userStoppedAutoDrive()
+        return stop(discardShorterThan: DriveDetection.minDriveMeters)
     }
 
     /// Car data from the OBD reader, written alongside GPS while recording. Called on the main queue.

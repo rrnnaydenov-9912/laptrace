@@ -58,7 +58,7 @@ struct RecordView: View {
             .onAppear { rec.startPreview() }
             .onDisappear { rec.stopPreviewIfIdle() }
             .confirmationDialog("Stop recording?", isPresented: $confirmStop, titleVisibility: .visible) {
-                Button("Stop and save", role: .destructive) { rec.stop() }
+                Button("Stop and save", role: .destructive) { rec.stopFromUser() }
             }
             .alert(sfMessage ?? "", isPresented: Binding(get: { sfMessage != nil }, set: { if !$0 { sfMessage = nil } })) {
                 Button("OK") {}

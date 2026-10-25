@@ -11,6 +11,7 @@ import UserNotifications
 /// Starting: the motion coprocessor reports driving, or three fixes within 30 s are above 30 km/h.
 /// Stopping (auto-started drives only): 4 minutes below 8 km/h, or 90 s of walking.
 /// Drives shorter than 500 m are thrown away as false starts.
+/// Never starts at a circuit, while the track screen is open, or for 30 minutes after you stop one by hand.
 @Observable
 final class DriveDetection: NSObject, CLLocationManagerDelegate {
     static let shared = DriveDetection()
@@ -22,7 +23,10 @@ final class DriveDetection: NSObject, CLLocationManagerDelegate {
     static let probeLength: Double = 90
     static let minDriveMeters = 500.0
 
+    static let suppressAfterManualStop: Double = 30 * 60
+
     private static let enabledKey = "autoDetectDrives"
+    private static let suppressKey = "autoDriveSuppressedUntil"
 
     private(set) var enabled = UserDefaults.standard.bool(forKey: enabledKey)
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
@@ -41,6 +45,12 @@ final class DriveDetection: NSObject, CLLocationManagerDelegate {
     @ObservationIgnored private var parkTimer: Timer?
     @ObservationIgnored private var walkingSince: Date?
     @ObservationIgnored private var running = false
+    /// Set by the track screen while it is on screen.
+    @ObservationIgnored var trackScreenOpen = false
+    @ObservationIgnored private var suppressedUntil: Date? {
+        get { UserDefaults.standard.object(forKey: Self.suppressKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: Self.suppressKey) }
+    }
 
     override init() {
         super.init()
@@ -144,7 +154,9 @@ final class DriveDetection: NSObject, CLLocationManagerDelegate {
         }
         switch recorder.state {
         case .idle:
-            if a.automotive && a.confidence != .low { startDrive() }
+            // The motion chip says "automotive" for a long time after a car stops, so it only opens a
+            // GPS probe. The probe starts the drive once the speed is confirmed.
+            if a.automotive && a.confidence != .low && probeUntil == nil && canAutoStart { startProbe() }
         case .recording:
             checkParked()
         }
@@ -168,8 +180,25 @@ final class DriveDetection: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// False at a circuit, on the track screen, or within 30 minutes of a manual stop.
+    private var canAutoStart: Bool {
+        guard enabled, recorder.state == .idle, !trackScreenOpen else { return false }
+        if let until = suppressedUntil, until > Date() { return false }
+        if let fix = recorder.lastFix, TrackStore.shared.nearest(to: fix.latLon) != nil { return false }
+        return true
+    }
+
+    /// The driver stopped an auto-started drive by hand: don't start another one for a while.
+    func userStoppedAutoDrive() {
+        suppressedUntil = Date().addingTimeInterval(Self.suppressAfterManualStop)
+        parkTimer?.invalidate(); parkTimer = nil
+        lastMovingAt = nil
+        walkingSince = nil
+        endProbe()
+    }
+
     private func startDrive() {
-        guard recorder.state == .idle else { return }
+        guard canAutoStart else { endProbe(); return }
         probeTimer?.invalidate(); probeTimer = nil
         probeUntil = nil
         fastFixTimes = []

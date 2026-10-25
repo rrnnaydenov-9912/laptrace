@@ -34,7 +34,7 @@ struct AccelView: View {
         .onDisappear {
             rec.accel = nil
             rec.stopPreviewIfIdle()
-            UIApplication.shared.isIdleTimerDisabled = false
+            UIApplication.shared.isIdleTimerDisabled = rec.state == .recording
         }
     }
 
