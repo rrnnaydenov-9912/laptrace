@@ -9,23 +9,43 @@
 /* Begin PBXBuildFile section */
 		029ECDDEC9F59234AE5F046C /* Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD86CC57A657B686CA9427B8 /* Tracks.swift */; };
 		11146043473F59A7329B0DBD /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5069609DCC0DF5E57810A24D /* Recorder.swift */; };
+		2C07095B665CEED76D4C9620 /* ProbeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E43101D48B81434C75E9C3 /* ProbeView.swift */; };
 		3E1B5D7CB195714A72C3503C /* DriveDetection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7CB19D30037006098A93DE0 /* DriveDetection.swift */; };
+		42BE079284D3BB15B016B73B /* LiveG.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7340AC8291C05D0ED5D0374 /* LiveG.swift */; };
 		45588A51D3BD5F11685A1D30 /* LaptraceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */; };
 		4EE2F0CF27BBE94D23C4A0B6 /* Exporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */; };
 		532CFDA7FD428AD7E9CA3C89 /* RawData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11883366D7A6DB9210BD4229 /* RawData.swift */; };
+		5644E4CB9FB108F1C94381E6 /* OBDLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62EE9E414B60A45FC438201D /* OBDLive.swift */; };
+		567068A25FB925F2E8F554F8 /* AccelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE2BE1A8B4BFEE2A09D1F2AA /* AccelView.swift */; };
+		571F7C745DB985344310BB9A /* LiveLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7C35525EE8E5B080E0ACB7 /* LiveLineTests.swift */; };
 		6383B7A08759536FC076FE12 /* LapCue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C409EEE2C8F7863EC642CBD /* LapCue.swift */; };
+		687557B369CAC628DA80768D /* LapOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6087AB29100640465245C74 /* LapOverlayView.swift */; };
+		69955DF16059A8D88AB43B34 /* DriveCorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C4952FA25039DDCD1E62C69 /* DriveCorpusTests.swift */; };
 		7BB1E11E70D2E80E4B5CB593 /* Coach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F4D093180573ED7D434BEF /* Coach.swift */; };
+		7F9282F7DF1F1D2FF7550549 /* Accel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C161383BFBDA2D757F47EDC /* Accel.swift */; };
+		821D67DEE3F6B46D8D2C3A43 /* TrackDashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B555A2325E2B57A3278388 /* TrackDashView.swift */; };
 		881CF232A046E88CEA0D2BF1 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */; };
+		913E6173CE681A5272EA7197 /* DriveStartGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF19DE4F4F2985F47C8EE66F /* DriveStartGate.swift */; };
 		9CDAF42411C9248551F9ADE5 /* tracks.json in Resources */ = {isa = PBXBuildFile; fileRef = 13A96D481C9451AC06DD36BA /* tracks.json */; };
+		9E169B73C906411CF924AFF5 /* LiveLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC1B801B65D660DFCBC0109 /* LiveLine.swift */; };
+		A34B24DA1EB65B4C76199480 /* LiveGTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06F2BFFF8A806BC1860381FD /* LiveGTests.swift */; };
 		A4D636CC4A3C4E81441D8EE1 /* DebriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A6C6F01B12C3957F31A86D /* DebriefView.swift */; };
+		A781780EC84B3F38A17C747A /* AccelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EFBD1CEC6F15D1EDC5B0D2 /* AccelTests.swift */; };
+		AFBA048B3697B5AAFBF4722C /* DriveStartGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE4731DB305577C8BEEC62C /* DriveStartGateTests.swift */; };
 		B1E427071D151B35CC23F63A /* ExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */; };
 		B4C9A6DAC815BE91297A1825 /* LapTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B44ABD087B9F95368930D6 /* LapTimer.swift */; };
+		B50A60F50B03353D4C329F6F /* OBDDecode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A586EA7EF7A519D749A833 /* OBDDecode.swift */; };
 		B8089E51E274E0874D79F219 /* TracksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */; };
+		C536DF9591DFD86B145896C8 /* OBDDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBAB5024735EEA19994A0814 /* OBDDecodeTests.swift */; };
 		CFAC254ECDD3243596D35CA9 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB0B5B8D298DE67111D6333 /* Geo.swift */; };
+		D6DCF7667A87B4619402CE18 /* DriveInsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8AF2FAA1626C8F17CF103E /* DriveInsightsView.swift */; };
 		D74C9A4BB81EC6EBB7B71A69 /* Synthetic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */; };
+		DCD6DEE29FF94ACB36D28DCB /* OBDProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7265E34622CBF37B1B4E2A84 /* OBDProbe.swift */; };
 		DDE42EEEA9CDBDCBC86D8F0E /* CoachTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C833AE8A97E5C3E54AEE6AA /* CoachTests.swift */; };
+		E11E7095A378CBC46C1093AE /* ELM327Link.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB27B1BD22524EB700653E8 /* ELM327Link.swift */; };
 		E38C5B75A5FE3909DE5A7D60 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */; };
 		F65DA0D01AF0695F4C9D68EA /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94A3735A387D8E6CE74B465 /* SessionStore.swift */; };
+		F7ED175FA3D0A0A72F6A6853 /* DriveCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4FB3EDD8850BE57495EB55 /* DriveCorpus.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,27 +59,47 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		06F2BFFF8A806BC1860381FD /* LiveGTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGTests.swift; sourceTree = "<group>"; };
+		08B555A2325E2B57A3278388 /* TrackDashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackDashView.swift; sourceTree = "<group>"; };
 		11883366D7A6DB9210BD4229 /* RawData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawData.swift; sourceTree = "<group>"; };
 		13A96D481C9451AC06DD36BA /* tracks.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tracks.json; sourceTree = "<group>"; };
 		1C409EEE2C8F7863EC642CBD /* LapCue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LapCue.swift; sourceTree = "<group>"; };
 		2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
+		25E43101D48B81434C75E9C3 /* ProbeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbeView.swift; sourceTree = "<group>"; };
+		2C161383BFBDA2D757F47EDC /* Accel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accel.swift; sourceTree = "<group>"; };
 		30F4D093180573ED7D434BEF /* Coach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coach.swift; sourceTree = "<group>"; };
 		423CB57DD3C751ED04DC8E22 /* LaptraceLogger.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LaptraceLogger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exporter.swift; sourceTree = "<group>"; };
+		4C4952FA25039DDCD1E62C69 /* DriveCorpusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveCorpusTests.swift; sourceTree = "<group>"; };
 		4DB0B5B8D298DE67111D6333 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
 		4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		4F7C35525EE8E5B080E0ACB7 /* LiveLineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveLineTests.swift; sourceTree = "<group>"; };
 		5069609DCC0DF5E57810A24D /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		5EB27B1BD22524EB700653E8 /* ELM327Link.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ELM327Link.swift; sourceTree = "<group>"; };
+		62EE9E414B60A45FC438201D /* OBDLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBDLive.swift; sourceTree = "<group>"; };
 		6C833AE8A97E5C3E54AEE6AA /* CoachTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachTests.swift; sourceTree = "<group>"; };
+		7265E34622CBF37B1B4E2A84 /* OBDProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBDProbe.swift; sourceTree = "<group>"; };
 		76A6C6F01B12C3957F31A86D /* DebriefView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebriefView.swift; sourceTree = "<group>"; };
+		8B4FB3EDD8850BE57495EB55 /* DriveCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveCorpus.swift; sourceTree = "<group>"; };
 		8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Synthetic.swift; sourceTree = "<group>"; };
 		9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaptraceApp.swift; sourceTree = "<group>"; };
 		A8B44ABD087B9F95368930D6 /* LapTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LapTimer.swift; sourceTree = "<group>"; };
+		AD8AF2FAA1626C8F17CF103E /* DriveInsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveInsightsView.swift; sourceTree = "<group>"; };
+		AEE4731DB305577C8BEEC62C /* DriveStartGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveStartGateTests.swift; sourceTree = "<group>"; };
+		B7A586EA7EF7A519D749A833 /* OBDDecode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBDDecode.swift; sourceTree = "<group>"; };
 		B94A3735A387D8E6CE74B465 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		BDF4F1BB804EB781DAA34888 /* LaptraceCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LaptraceCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE2BE1A8B4BFEE2A09D1F2AA /* AccelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccelView.swift; sourceTree = "<group>"; };
 		C2B0264D905CC660E8C4A1F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C7CB19D30037006098A93DE0 /* DriveDetection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveDetection.swift; sourceTree = "<group>"; };
+		DF19DE4F4F2985F47C8EE66F /* DriveStartGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveStartGate.swift; sourceTree = "<group>"; };
+		E2EFBD1CEC6F15D1EDC5B0D2 /* AccelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccelTests.swift; sourceTree = "<group>"; };
+		E6087AB29100640465245C74 /* LapOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LapOverlayView.swift; sourceTree = "<group>"; };
 		EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExporterTests.swift; sourceTree = "<group>"; };
 		ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracksView.swift; sourceTree = "<group>"; };
+		EDC1B801B65D660DFCBC0109 /* LiveLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveLine.swift; sourceTree = "<group>"; };
+		F7340AC8291C05D0ED5D0374 /* LiveG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveG.swift; sourceTree = "<group>"; };
+		FBAB5024735EEA19994A0814 /* OBDDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBDDecodeTests.swift; sourceTree = "<group>"; };
 		FD86CC57A657B686CA9427B8 /* Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tracks.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -67,10 +107,14 @@
 		1271F671717721A7BB3C768A /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				2C161383BFBDA2D757F47EDC /* Accel.swift */,
 				30F4D093180573ED7D434BEF /* Coach.swift */,
+				8B4FB3EDD8850BE57495EB55 /* DriveCorpus.swift */,
 				46A9B24CD1A56EDBDC56AA82 /* Exporter.swift */,
 				4DB0B5B8D298DE67111D6333 /* Geo.swift */,
 				A8B44ABD087B9F95368930D6 /* LapTimer.swift */,
+				F7340AC8291C05D0ED5D0374 /* LiveG.swift */,
+				EDC1B801B65D660DFCBC0109 /* LiveLine.swift */,
 				11883366D7A6DB9210BD4229 /* RawData.swift */,
 				FD86CC57A657B686CA9427B8 /* Tracks.swift */,
 			);
@@ -89,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				C7CB19D30037006098A93DE0 /* DriveDetection.swift */,
+				DF19DE4F4F2985F47C8EE66F /* DriveStartGate.swift */,
 				1C409EEE2C8F7863EC642CBD /* LapCue.swift */,
 				5069609DCC0DF5E57810A24D /* Recorder.swift */,
 				B94A3735A387D8E6CE74B465 /* SessionStore.swift */,
@@ -108,9 +153,14 @@
 		6A813D2B0DF1AE6622F4F254 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				BE2BE1A8B4BFEE2A09D1F2AA /* AccelView.swift */,
 				76A6C6F01B12C3957F31A86D /* DebriefView.swift */,
+				AD8AF2FAA1626C8F17CF103E /* DriveInsightsView.swift */,
+				E6087AB29100640465245C74 /* LapOverlayView.swift */,
+				25E43101D48B81434C75E9C3 /* ProbeView.swift */,
 				2182FEF9ED9BC3D20FB91FB7 /* RecordView.swift */,
 				4EB21A3DE1FE0C5A8268590F /* SessionsView.swift */,
+				08B555A2325E2B57A3278388 /* TrackDashView.swift */,
 				ECA8849ABD4C8D23BCB7AF93 /* TracksView.swift */,
 			);
 			path = Views;
@@ -122,6 +172,7 @@
 				C2B0264D905CC660E8C4A1F8 /* Info.plist */,
 				9483E47D6AE4120C1B57DAED /* LaptraceApp.swift */,
 				1271F671717721A7BB3C768A /* Core */,
+				B67364EF5CC97A56B9AB41A5 /* OBD */,
 				55F224D8370AB4291A95F8E2 /* Recording */,
 				2B328BDEE8B752DAD7E5B032 /* Resources */,
 				6A813D2B0DF1AE6622F4F254 /* Views */,
@@ -129,11 +180,28 @@
 			path = Laptrace;
 			sourceTree = "<group>";
 		};
+		B67364EF5CC97A56B9AB41A5 /* OBD */ = {
+			isa = PBXGroup;
+			children = (
+				5EB27B1BD22524EB700653E8 /* ELM327Link.swift */,
+				B7A586EA7EF7A519D749A833 /* OBDDecode.swift */,
+				62EE9E414B60A45FC438201D /* OBDLive.swift */,
+				7265E34622CBF37B1B4E2A84 /* OBDProbe.swift */,
+			);
+			path = OBD;
+			sourceTree = "<group>";
+		};
 		B8A69F9A2E9D03D4DF99EE5F /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				E2EFBD1CEC6F15D1EDC5B0D2 /* AccelTests.swift */,
 				6C833AE8A97E5C3E54AEE6AA /* CoachTests.swift */,
+				4C4952FA25039DDCD1E62C69 /* DriveCorpusTests.swift */,
+				AEE4731DB305577C8BEEC62C /* DriveStartGateTests.swift */,
 				EBA671D5BEBC8CDDE4B64810 /* ExporterTests.swift */,
+				06F2BFFF8A806BC1860381FD /* LiveGTests.swift */,
+				4F7C35525EE8E5B080E0ACB7 /* LiveLineTests.swift */,
+				FBAB5024735EEA19994A0814 /* OBDDecodeTests.swift */,
 				8BC3D2AF6C9C7998315A0D52 /* Synthetic.swift */,
 			);
 			path = Tests;
@@ -197,11 +265,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					6C08B4BEF89CDB2B962F14A4 = {
-						
+						DevelopmentTeam = 96XM3WRV8A;
 						ProvisioningStyle = Automatic;
 					};
 					965BCE62021E616229DDB423 = {
-						
+						DevelopmentTeam = 96XM3WRV8A;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -242,19 +310,33 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7F9282F7DF1F1D2FF7550549 /* Accel.swift in Sources */,
+				567068A25FB925F2E8F554F8 /* AccelView.swift in Sources */,
 				7BB1E11E70D2E80E4B5CB593 /* Coach.swift in Sources */,
 				A4D636CC4A3C4E81441D8EE1 /* DebriefView.swift in Sources */,
+				F7ED175FA3D0A0A72F6A6853 /* DriveCorpus.swift in Sources */,
 				3E1B5D7CB195714A72C3503C /* DriveDetection.swift in Sources */,
+				D6DCF7667A87B4619402CE18 /* DriveInsightsView.swift in Sources */,
+				913E6173CE681A5272EA7197 /* DriveStartGate.swift in Sources */,
+				E11E7095A378CBC46C1093AE /* ELM327Link.swift in Sources */,
 				4EE2F0CF27BBE94D23C4A0B6 /* Exporter.swift in Sources */,
 				CFAC254ECDD3243596D35CA9 /* Geo.swift in Sources */,
 				6383B7A08759536FC076FE12 /* LapCue.swift in Sources */,
+				687557B369CAC628DA80768D /* LapOverlayView.swift in Sources */,
 				B4C9A6DAC815BE91297A1825 /* LapTimer.swift in Sources */,
 				45588A51D3BD5F11685A1D30 /* LaptraceApp.swift in Sources */,
+				42BE079284D3BB15B016B73B /* LiveG.swift in Sources */,
+				9E169B73C906411CF924AFF5 /* LiveLine.swift in Sources */,
+				B50A60F50B03353D4C329F6F /* OBDDecode.swift in Sources */,
+				5644E4CB9FB108F1C94381E6 /* OBDLive.swift in Sources */,
+				DCD6DEE29FF94ACB36D28DCB /* OBDProbe.swift in Sources */,
+				2C07095B665CEED76D4C9620 /* ProbeView.swift in Sources */,
 				532CFDA7FD428AD7E9CA3C89 /* RawData.swift in Sources */,
 				881CF232A046E88CEA0D2BF1 /* RecordView.swift in Sources */,
 				11146043473F59A7329B0DBD /* Recorder.swift in Sources */,
 				F65DA0D01AF0695F4C9D68EA /* SessionStore.swift in Sources */,
 				E38C5B75A5FE3909DE5A7D60 /* SessionsView.swift in Sources */,
+				821D67DEE3F6B46D8D2C3A43 /* TrackDashView.swift in Sources */,
 				029ECDDEC9F59234AE5F046C /* Tracks.swift in Sources */,
 				B8089E51E274E0874D79F219 /* TracksView.swift in Sources */,
 			);
@@ -264,8 +346,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A781780EC84B3F38A17C747A /* AccelTests.swift in Sources */,
 				DDE42EEEA9CDBDCBC86D8F0E /* CoachTests.swift in Sources */,
+				69955DF16059A8D88AB43B34 /* DriveCorpusTests.swift in Sources */,
+				AFBA048B3697B5AAFBF4722C /* DriveStartGateTests.swift in Sources */,
 				B1E427071D151B35CC23F63A /* ExporterTests.swift in Sources */,
+				A34B24DA1EB65B4C76199480 /* LiveGTests.swift in Sources */,
+				571F7C745DB985344310BB9A /* LiveLineTests.swift in Sources */,
+				C536DF9591DFD86B145896C8 /* OBDDecodeTests.swift in Sources */,
 				D74C9A4BB81EC6EBB7B71A69 /* Synthetic.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -290,6 +378,7 @@
 				INFOPLIST_FILE = Laptrace/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Laptrace;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Laptrace connects to your OBD reader to record RPM, throttle and other car data.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Laptrace keeps recording while the screen is locked, and with Auto-record drives on, starts recording a drive by itself when you begin driving.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Laptrace records your GPS track to time laps and analyse your driving.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Laptrace records acceleration to measure braking and cornering g-forces.";
@@ -300,7 +389,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.logger;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rrnnaydenov.laptrace;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -343,7 +432,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 96XM3WRV8A;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -444,7 +533,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 96XM3WRV8A;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -476,6 +565,7 @@
 				INFOPLIST_FILE = Laptrace/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Laptrace;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Laptrace connects to your OBD reader to record RPM, throttle and other car data.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Laptrace keeps recording while the screen is locked, and with Auto-record drives on, starts recording a drive by itself when you begin driving.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Laptrace records your GPS track to time laps and analyse your driving.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Laptrace records acceleration to measure braking and cornering g-forces.";
@@ -486,7 +576,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.laptrace.logger;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rrnnaydenov.laptrace;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

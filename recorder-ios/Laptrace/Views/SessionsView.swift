@@ -71,6 +71,8 @@ struct SessionDetail: View {
                     NavigationLink("Lap lines") { LapOverlayView(meta: meta, track: track) }
                     NavigationLink("Detailed analysis") { SessionAnalysisView(meta: meta, track: track) }
                 }
+            } else {
+                DriveInsightsView(session: meta)
             }
             Section {
                 TextField("Driver", text: text(\.driver))
